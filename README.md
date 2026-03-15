@@ -1,3 +1,3 @@
 
-# tecmo-super-analyzer
+# tecmo-super-bowl
 

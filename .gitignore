@@ -15,6 +15,9 @@ node_modules/
 dist/
 build/
 
+# Database
+data/*.db
+
 # Environment
 .env
 .env.local
