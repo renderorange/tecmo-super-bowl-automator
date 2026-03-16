@@ -1,160 +1,219 @@
 -- Memory addresses for Tecmo Super Bowl
 -- Sources:
--- - https://gist.github.com/IIpepeII/fb09015e45a265bfe557cb608a9d8683
 -- - https://github.com/bruddog/Tecmo_Super_Bowl_NES_Disassembly
+--   (zero_page_variables.asm, ram_variables.asm, sram_variables.asm, stat_indexes.asm)
 
+------------------------------------------------------------------------
+-- RAM addresses (zero-page and general)
+------------------------------------------------------------------------
 local ADDR = {
-    -- Zero-page variables (from bruddog disassembly)
-    -- Task system: $00-$2A
-    TASK_BUSY_FLAG = 0x2A,      -- 0x80 = task switch in progress
-
     -- Game status
-    GAME_STATUS = 0x2D,         -- Game mode (0x00=normal, 0x02=season, 0x40=attract)
+    GAME_STATUS = 0x2D,         -- Bit flags: $02=season, $40=game in progress, etc.
+    FRAME_COUNTER = 0x30,
 
-    -- PPU/Bank/Frame
-    SOFT_8000_BANK = 0x2E,
-    FRAME_COUNTER = 0x30,       -- Increments every frame
-    SOFT_PPU_CTRL = 0x31,
+    -- Joypad state (written by NMI handler each frame)
+    -- TSB bit layout (MSB-first via ROL): A=0x80, B=0x40, Sel=0x20, Start=0x10,
+    --   Up=0x08, Down=0x04, Left=0x02, Right=0x01
+    JOY_RAW_1 = 0x35,
+    JOY_PRESS_1 = 0x38,
+    JOY_PRESS_BOTH = 0x3A,
 
-    -- Joypad state (stored by NMI handler)
-    -- Button bit layout (MSB-first, built via ROL):
-    --   bit 7=A, 6=B, 5=Select, 4=Start, 3=Up, 2=Down, 1=Left, 0=Right
-    -- NOTE: This is the TSB internal format, reversed from the nesl
-    --   joypad.write() hardware format (A=0x01, start=0x08, etc.)
-    JOY_RAW_1 = 0x35,          -- P1 buttons held this frame
-    JOY_RAW_2 = 0x36,          -- P2 buttons held
-    JOY_RAW_BOTH = 0x37,       -- P1|P2 buttons held
-    JOY_PRESS_1 = 0x38,        -- P1 newly pressed (edge-triggered)
-    JOY_PRESS_2 = 0x39,        -- P2 newly pressed
-    JOY_PRESS_BOTH = 0x3A,     -- P1|P2 newly pressed
-
-    -- Random numbers
-    RANDOM_1 = 0x3B,
-    RANDOM_2 = 0x3C,
-    RANDOM_3 = 0x3D,
-
-    -- Team IDs
+    -- Team IDs (0x00-0x1B = 28 teams)
     P1_TEAM = 0x6C,
     P2_TEAM = 0x6D,
     TEAM_ON_OFFENSE = 0x6F,     -- 0=P1, 1=P2
 
-    -- Gameplay status
-    POSSESSION_STATUS = 0x70,
-    PLAY_STATUS = 0x71,
-    BALL_STATUS = 0x72,
+    -- Control type for current matchup
+    TEAM_CONTROL_TYPES = 0x75,  -- High nibble=P1, Low nibble=P2
+                                -- 0=MAN, 1=COA, 2=COM, 3=SKP
 
-    -- Team control type
-    TEAM_CONTROL_TYPES = 0x75,  -- nibble1=P1, nibble2=P2 (0=MAN, 1=COA, 2=COM, 3=SKP)
-
-    -- Quarter/Down
-    QUARTER = 0x76,             -- Current quarter
+    -- Quarter/Down/Clock
+    QUARTER = 0x76,             -- 0-based (0=Q1, 3=Q4)
     DOWN = 0x77,
-
-    -- Clock
-    CLOCK_RUN_TYPE = 0x69,
     CLOCK_SECONDS = 0x6A,
     CLOCK_MINUTES = 0x6B,
 
-    -- Menu state (shared zero-page space)
-    MENU_Y = 0xE1,             -- Menu cursor Y position
-    MENU_X = 0xE2,             -- Menu cursor X position
+    -- Menu cursor
+    MENU_Y = 0xE1,             -- Current menu selection index
 
-    -- Score (0x3CD): 5 bytes per team (Q1, Q2, Q3, Q4, Total)
-    SCORE_LOC = 0x3CD,
-
-    -- Team abbreviations (4 bytes each)
-    HOME_TEAM_ABBRV = 0xC0F,
-    AWAY_TEAM_ABBRV = 0xC2F,
-
-    -- Team stats - Home (at end of game)
-    HOME_RUNS_ATMPT = 0xC14,   -- 3 bytes
-    HOME_RUNS_YARDS = 0xC18,   -- 3 bytes
-    HOME_PASS = 0xC1E,         -- 4 bytes
-    HOME_FIRSTS = 0xC26,       -- 2 bytes
-
-    -- Team stats - Away
-    AWAY_RUNS_ATMPT = 0xC34,
-    AWAY_RUNS_YARDS = 0xC38,
-    AWAY_PASS = 0xC3E,
-    AWAY_FIRSTS = 0xC46,
-
-    -- RB stats (starts at 0xCF4)
-    -- 17 bytes name, 2 bytes att, 4 bytes yards per RB
-    HOME_RB_START = 0xCF4,
-    AWAY_RB_START = 0xD14,
-
-    -- QB stats
-    -- 13 bytes name, 3 bytes %, 4 bytes yards, 3 bytes INT
-    HOME_QB_START = 0xD54,
-    AWAY_QB_START = 0xD74,
-
-    -- WR stats
-    -- 17 bytes name, 2 bytes catches, 4 bytes yards
-    HOME_WR_START = 0xDB4,
-    AWAY_WR_START = 0xDD4,
-
-    -- Season state
-    SEASON_WEEK = 0x0520,       -- Current week (1-17)
+    -- Scores (RAM, not SRAM)
+    -- 5 bytes per team at $0395: Q1, Q2, Q3, Q4, Total
+    -- NOTE: Per-quarter bytes may not sum to total (OT, defensive scores).
+    -- Use the total as the authoritative final score.
+    P1_TOTAL_SCORE = 0x0399,
+    P2_TOTAL_SCORE = 0x039E,
 }
 
--- Game phases (derived from game state)
-local PHASE = {
-    TITLE = 0,
-    MENU = 1,
-    SEASON_SETUP = 2,
-    PLAYING = 3,
-    GAME_OVER = 4,
-    STATS_SCREEN = 5,
-    WEEK_SELECT = 6,
+------------------------------------------------------------------------
+-- SRAM addresses ($6000-$7FFF, battery-backed)
+-- Writes require MMC3 enable: memory.writebyte(0xA001, 0x80)
+------------------------------------------------------------------------
+local SRAM = {
+    -- Team control types (28 bytes, one per team: 0=MAN,1=COA,2=COM,3=SKP)
+    TEAM_TYPE_SEASON = 0x669B,
+
+    -- Season tracking
+    CURRENT_WEEK = 0x6758,       -- 0-based week index
+    CURRENT_GAME = 0x6759,       -- Current game within week
+    WEEKLY_MATCHUPS = 0x675A,    -- 28 bytes: pairs of team IDs
+
+    -- In-game team stats (12 bytes)
+    -- NOTE: These may only be populated in SKP/SIM mode, not COM mode.
+    -- For COM games, derive team stats from individual player stats instead.
+    TEAM_STATS = 0x668E,
+    P1_FIRST_DOWNS = 0x668E,
+    P2_FIRST_DOWNS = 0x668F,
+    P1_RUSHES = 0x6690,
+    P2_RUSHES = 0x6691,
+    P1_RUSH_YARDS = 0x6692,     -- 2 bytes (little-endian)
+    P2_RUSH_YARDS = 0x6694,     -- 2 bytes
+    P1_PASS_YARDS = 0x6696,     -- 2 bytes
+    P2_PASS_YARDS = 0x6698,     -- 2 bytes
+
+    -- In-game player stats
+    -- Each team block: QB(10)*2 + RB(16)*4 + WR(16)*4 + TE(16)*2 + DEF(5)*11
+    --   + K(4) + P(3) + playbook(4) + starters(4) + injuries(3) + conditions(8) = 261 bytes
+    P1_STATS = 0x6406,          -- Start of P1 player stats block
+    P2_STATS = 0x650B,          -- Start of P2 player stats block (P1 + 261 = $6406 + $105)
+
+    -- Player stat block offsets (from team stats start)
+    -- QB: 10 bytes each, 2 QBs
+    QB1_OFFSET = 0,
+    QB2_OFFSET = 10,
+    -- RB: 16 bytes each, 4 RBs
+    RB1_OFFSET = 20,
+    RB2_OFFSET = 36,
+    RB3_OFFSET = 52,
+    RB4_OFFSET = 68,
+    -- WR: 16 bytes each, 4 WRs
+    WR1_OFFSET = 84,
+    WR2_OFFSET = 100,
+    WR3_OFFSET = 116,
+    WR4_OFFSET = 132,
+    -- TE: 16 bytes each, 2 TEs
+    TE1_OFFSET = 148,
+    TE2_OFFSET = 164,
+    -- DEF: 5 bytes each, 11 defenders
+    RE_OFFSET = 180,
+    NT_OFFSET = 185,
+    LE_OFFSET = 190,
+    ROLB_OFFSET = 195,
+    RILB_OFFSET = 200,
+    LILB_OFFSET = 205,
+    LOLB_OFFSET = 210,
+    RCB_OFFSET = 215,
+    LCB_OFFSET = 220,
+    FS_OFFSET = 225,
+    SS_OFFSET = 230,
+    -- K: 4 bytes
+    K_OFFSET = 235,
+    -- P: 3 bytes
+    P_OFFSET = 239,
 }
 
--- Team abbreviations to IDs
-local TEAM_IDS = {
-    BUF = 1, MIA = 2, NE = 3, NYJ = 4,
-    IND = 5, JAC = 6, TEN = 7, CLE = 8,
-    PIT = 9, CIN = 10, HOU = 11, JAX = 12,
-    DAL = 13, PHI = 14, WAS = 15, NYG = 16,
-    CHI = 17, DET = 18, GB = 19, MIN = 20,
-    TB = 21, ATL = 22, CAR = 23, NO = 24,
-    ARI = 25, SF = 26, SEA = 27, STL = 28,
+------------------------------------------------------------------------
+-- Stat byte indexes within each player's stat block
+------------------------------------------------------------------------
+
+-- QB (10 bytes)
+local QB_STAT = {
+    PASS_ATT = 0,
+    PASS_COMP = 1,
+    PASS_TD = 2,
+    PASS_INT = 3,
+    PASS_YDS_LO = 4,       -- 16-bit little-endian with next byte
+    PASS_YDS_HI = 5,
+    RUSH_ATT = 6,
+    RUSH_YDS_LO = 7,
+    RUSH_YDS_HI = 8,
+    RUSH_TD = 9,
 }
 
--- Reverse lookup
-local ID_TO_TEAM = {}
-for abbr, id in pairs(TEAM_IDS) do
-    ID_TO_TEAM[id] = abbr
+-- Skill position: RB, WR, TE (16 bytes)
+local SKILL_STAT = {
+    REC = 0,
+    REC_YDS_LO = 1,
+    REC_YDS_HI = 2,
+    REC_TD = 3,
+    KR_ATT = 4,
+    KR_YDS_LO = 5,
+    KR_YDS_HI = 6,
+    KR_TD = 7,
+    PR_ATT = 8,
+    PR_YDS_LO = 9,
+    PR_YDS_HI = 10,
+    PR_TD = 11,
+    RUSH_ATT = 12,
+    RUSH_YDS_LO = 13,
+    RUSH_YDS_HI = 14,
+    RUSH_TD = 15,
+}
+
+-- Defensive player (5 bytes)
+local DEF_STAT = {
+    SACKS = 0,
+    INTS = 1,
+    INT_YDS_LO = 2,
+    INT_YDS_HI = 3,
+    INT_TD = 4,
+}
+
+-- Kicker (4 bytes)
+local K_STAT = {
+    XP_ATT = 0,
+    XP_MADE = 1,
+    FG_ATT = 2,
+    FG_MADE = 3,
+}
+
+-- Punter (3 bytes)
+local P_STAT = {
+    PUNTS = 0,
+    PUNT_YDS_LO = 1,
+    PUNT_YDS_HI = 2,
+}
+
+------------------------------------------------------------------------
+-- Team ID mapping (0x00-0x1B)
+-- Order matches the ROM's internal team index
+------------------------------------------------------------------------
+local TEAM_NAMES = {
+    [0x00] = "BUF", [0x01] = "MIA", [0x02] = "IND", [0x03] = "NYJ", [0x04] = "NE",
+    [0x05] = "CIN", [0x06] = "CLE", [0x07] = "HOU", [0x08] = "PIT",
+    [0x09] = "DEN", [0x0A] = "KC",  [0x0B] = "RAI", [0x0C] = "SD",  [0x0D] = "SEA",
+    [0x0E] = "DAL", [0x0F] = "NYG", [0x10] = "PHI", [0x11] = "PHX", [0x12] = "WAS",
+    [0x13] = "CHI", [0x14] = "DET", [0x15] = "GB",  [0x16] = "MIN", [0x17] = "TB",
+    [0x18] = "ATL", [0x19] = "NO",  [0x1A] = "RAMS", [0x1B] = "SF",
+}
+
+------------------------------------------------------------------------
+-- Helpers
+------------------------------------------------------------------------
+
+local function read16(addr)
+    return memory.readbyte(addr) + memory.readbyte(addr + 1) * 256
 end
 
 local function readBytes(addr, len)
     local bytes = {}
     for i = 0, len - 1 do
-        table.insert(bytes, memory.readbyte(addr + i))
+        bytes[i] = memory.readbyte(addr + i)
     end
     return bytes
 end
 
-local function readString(addr, len)
-    local chars = {}
-    for i = 0, len - 1 do
-        local b = memory.readbyte(addr + i)
-        if b == 0 then break end
-        table.insert(chars, string.char(b))
-    end
-    return table.concat(chars)
-end
-
-local function readBCD(addr)
-    -- BCD (Binary Coded Decimal) to decimal
-    local b = memory.readbyte(addr)
-    return math.floor(b / 16) * 10 + (b % 16)
-end
-
+------------------------------------------------------------------------
+-- Exports
+------------------------------------------------------------------------
 return {
     ADDR = ADDR,
-    PHASE = PHASE,
-    TEAM_IDS = TEAM_IDS,
-    ID_TO_TEAM = ID_TO_TEAM,
+    SRAM = SRAM,
+    QB_STAT = QB_STAT,
+    SKILL_STAT = SKILL_STAT,
+    DEF_STAT = DEF_STAT,
+    K_STAT = K_STAT,
+    P_STAT = P_STAT,
+    TEAM_NAMES = TEAM_NAMES,
+    read16 = read16,
     readBytes = readBytes,
-    readString = readString,
-    readBCD = readBCD,
 }
