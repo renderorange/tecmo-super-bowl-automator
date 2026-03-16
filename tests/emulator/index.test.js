@@ -1,143 +1,170 @@
 /**
- * Tests for the FCEUX Emulator wrapper.
+ * Tests for the nesl Emulator wrapper.
  */
 
 import { Emulator } from "../../src/emulator/index.js";
 import fs from "fs";
 import path from "path";
+import { fileURLToPath } from "url";
 
-const TEST_WORK_DIR = "/tmp/test-emu-workdir";
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
+const TEST_OUTPUT_FILE = "/tmp/test-emu-output.jsonl";
 
 describe("Emulator", () => {
     let emulator;
 
-    beforeEach(() => {
-        emulator = new Emulator({
-            workDir: TEST_WORK_DIR,
-            romPath: "/fake/rom.nes",
-            fceuxPath: "/bin/true"
-        });
-    });
-
     afterEach(() => {
-        emulator.forceQuit();
-        if (fs.existsSync(TEST_WORK_DIR)) {
-            fs.rmSync(TEST_WORK_DIR, { recursive: true });
+        if (emulator) {
+            emulator.forceStop();
+        }
+        if (fs.existsSync(TEST_OUTPUT_FILE)) {
+            fs.unlinkSync(TEST_OUTPUT_FILE);
         }
     });
 
     describe("constructor", () => {
-        test("creates work directory", () => {
-            expect(fs.existsSync(TEST_WORK_DIR))
-                .toBe(true);
-        });
-
-        test("creates state directory", () => {
-            const stateDir = path.join(TEST_WORK_DIR, "states");
-            expect(fs.existsSync(stateDir))
-                .toBe(true);
-        });
-
         test("uses default ROM path when not provided", () => {
-            const emu = new Emulator();
-            expect(emu.romPath)
-                .toBe("/home/blaine/roms/nes/Tecmo Super Bowl (USA).nes");
+            emulator = new Emulator();
+            expect(emulator.romPath)
+                .toContain("Tecmo Super Bowl (USA).nes");
         });
 
         test("accepts custom ROM path", () => {
             const customPath = "/custom/path/rom.nes";
-            const emu = new Emulator({ romPath: customPath });
-            expect(emu.romPath)
+            emulator = new Emulator({ romPath: customPath });
+            expect(emulator.romPath)
                 .toBe(customPath);
         });
 
-        test("accepts custom work directory", () => {
-            const customDir = "/tmp/custom-work";
-            const emu = new Emulator({ workDir: customDir });
-            expect(emu.workDir)
-                .toBe(customDir);
-        });
-
-        test("accepts custom fceux path", () => {
-            const customPath = "/usr/games/custom-fceux";
-            const emu = new Emulator({ fceuxPath: customPath });
-            expect(emu.fceuxPath)
+        test("accepts custom nesl path", () => {
+            const customPath = "/usr/local/bin/nesl";
+            emulator = new Emulator({ neslPath: customPath });
+            expect(emulator.neslPath)
                 .toBe(customPath);
         });
 
-        test("defaults to fceux command", () => {
-            const emu = new Emulator();
-            expect(emu.fceuxPath)
-                .toBe("fceux");
+        test("defaults nesl path to /tmp/nesl/build/nesl", () => {
+            emulator = new Emulator();
+            expect(emulator.neslPath)
+                .toBe("/tmp/nesl/build/nesl");
         });
 
-        test("defaults worker id to 0", () => {
-            expect(emulator.workerId)
-                .toBe(0);
+        test("accepts custom output file", () => {
+            emulator = new Emulator({ outputFile: "/tmp/custom-output.jsonl" });
+            expect(emulator.outputFile)
+                .toBe("/tmp/custom-output.jsonl");
         });
 
-        test("accepts custom worker id", () => {
-            const emu = new Emulator({ workerId: 5 });
-            expect(emu.workerId)
-                .toBe(5);
-        });
-    });
-
-    describe("state management", () => {
-        test("getStatePath returns correct path for slot", () => {
-            const statePath = emulator.getStatePath(0);
-            expect(statePath)
-                .toContain("state-0.fc0");
+        test("accepts custom max games", () => {
+            emulator = new Emulator({ maxGames: 14 });
+            expect(emulator.maxGames)
+                .toBe(14);
         });
 
-        test("getStatePath returns correct path for different slots", () => {
-            const statePath1 = emulator.getStatePath(5);
-            const statePath2 = emulator.getStatePath(10);
-            expect(statePath1)
-                .toContain("state-5.fc0");
-            expect(statePath2)
-                .toContain("state-10.fc0");
-        });
-
-        test("loadState throws for non-existent state", async () => {
-            await expect(emulator.loadState(999))
-                .rejects.toThrow("State file not found");
+        test("defaults lua script to controller.lua", () => {
+            emulator = new Emulator();
+            expect(emulator.luaScript)
+                .toContain("lua/controller.lua");
         });
     });
 
     describe("status methods", () => {
         test("isRunning returns false initially", () => {
+            emulator = new Emulator();
             expect(emulator.isRunning())
                 .toBe(false);
         });
-
-        test("started is false initially", () => {
-            expect(emulator.started)
-                .toBe(false);
-        });
-
-        test("getOutput returns empty buffer initially", () => {
-            expect(emulator.getOutput())
-                .toBe("");
-        });
     });
 
-    describe("quit methods", () => {
-        test("quit does not throw when process is null", () => {
-            expect(() => emulator.quit())
+    describe("stop methods", () => {
+        test("stop does not throw when process is null", () => {
+            emulator = new Emulator();
+            expect(() => emulator.stop())
                 .not.toThrow();
         });
 
-        test("forceQuit does not throw when process is null", () => {
-            expect(() => emulator.forceQuit())
+        test("forceStop does not throw when process is null", () => {
+            emulator = new Emulator();
+            expect(() => emulator.forceStop())
                 .not.toThrow();
         });
     });
 
-    describe("sendCommand", () => {
-        test("throws when emulator not running", async () => {
-            await expect(emulator.sendCommand("test"))
-                .rejects.toThrow("Emulator is not running");
+    describe("parseResults", () => {
+        test("returns empty array when file does not exist", () => {
+            emulator = new Emulator({ outputFile: "/tmp/nonexistent.jsonl" });
+            expect(emulator.parseResults())
+                .toEqual([]);
+        });
+
+        test("returns empty array for empty file", () => {
+            fs.writeFileSync(TEST_OUTPUT_FILE, "");
+            emulator = new Emulator({ outputFile: TEST_OUTPUT_FILE });
+            expect(emulator.parseResults())
+                .toEqual([]);
+        });
+
+        test("parses single JSON line", () => {
+            const game = { p1_team: "PHI", p2_team: "GB", p1_score: 41, p2_score: 33 };
+            fs.writeFileSync(TEST_OUTPUT_FILE, JSON.stringify(game) + "\n");
+            emulator = new Emulator({ outputFile: TEST_OUTPUT_FILE });
+            const results = emulator.parseResults();
+            expect(results).toHaveLength(1);
+            expect(results[0].p1_team).toBe("PHI");
+            expect(results[0].p1_score).toBe(41);
+        });
+
+        test("parses multiple JSON lines", () => {
+            const games = [
+                { p1_team: "PHI", p2_team: "GB", p1_score: 41, p2_score: 33 },
+                { p1_team: "PHX", p2_team: "NO", p1_score: 3, p2_score: 39 },
+                { p1_team: "NE", p2_team: "TB", p1_score: 53, p2_score: 21 },
+            ];
+            fs.writeFileSync(TEST_OUTPUT_FILE, games.map(g => JSON.stringify(g)).join("\n") + "\n");
+            emulator = new Emulator({ outputFile: TEST_OUTPUT_FILE });
+            const results = emulator.parseResults();
+            expect(results).toHaveLength(3);
+            expect(results[0].p1_team).toBe("PHI");
+            expect(results[1].p1_team).toBe("PHX");
+            expect(results[2].p1_team).toBe("NE");
+        });
+
+        test("skips malformed JSON lines", () => {
+            const content = '{"p1_team":"PHI"}\nnot json\n{"p1_team":"GB"}\n';
+            fs.writeFileSync(TEST_OUTPUT_FILE, content);
+            emulator = new Emulator({ outputFile: TEST_OUTPUT_FILE });
+            const results = emulator.parseResults();
+            expect(results).toHaveLength(2);
+            expect(results[0].p1_team).toBe("PHI");
+            expect(results[1].p1_team).toBe("GB");
+        });
+
+        test("accepts custom file path argument", () => {
+            const altFile = "/tmp/test-alt-output.jsonl";
+            const game = { p1_team: "BUF", p1_score: 28 };
+            fs.writeFileSync(altFile, JSON.stringify(game) + "\n");
+            emulator = new Emulator();
+            const results = emulator.parseResults(altFile);
+            expect(results).toHaveLength(1);
+            expect(results[0].p1_team).toBe("BUF");
+            fs.unlinkSync(altFile);
+        });
+    });
+
+    describe("run", () => {
+        test("rejects when ROM not found", async () => {
+            emulator = new Emulator({ romPath: "/nonexistent/rom.nes" });
+            await expect(emulator.run())
+                .rejects.toThrow("ROM not found");
+        });
+
+        test("rejects when nesl not found", async () => {
+            emulator = new Emulator({ neslPath: "/nonexistent/nesl" });
+            // Only test if the ROM actually exists (skip in CI)
+            if (fs.existsSync(emulator.romPath)) {
+                await expect(emulator.run())
+                    .rejects.toThrow("nesl not found");
+            }
         });
     });
 });
