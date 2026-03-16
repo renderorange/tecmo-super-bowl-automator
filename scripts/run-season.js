@@ -7,12 +7,15 @@
  *   node scripts/run-season.js [options]
  *
  * Options:
- *   --output, -o  Output JSONL file (default: runs/season-{timestamp}.jsonl)
- *   --max-games   Max games to run (default: 238 = 14*17)
- *   --quiet, -q   Suppress per-game output
+ *   --output, -o   Output JSONL file (default: runs/season-{timestamp}.jsonl)
+ *   --max-games    Max games to run (default: 238 = 14*17)
+ *   --quiet, -q    Suppress per-game output
+ *   --save-db, -d  Save results to database
  */
 
 import { Emulator } from "../src/emulator/index.js";
+import { SeasonRepository } from "../src/db/season-repository.js";
+import db from "../src/db/index.js";
 import fs from "fs";
 import path from "path";
 import minimist from "minimist";
@@ -22,7 +25,7 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const projectRoot = path.resolve(__dirname, "..");
 
 const args = minimist(process.argv.slice(2), {
-    alias: { o: "output", q: "quiet" },
+    alias: { o: "output", q: "quiet", d: "save-db" },
     default: { "max-games": 238 },
 });
 
@@ -34,17 +37,25 @@ fs.mkdirSync(runsDir, { recursive: true });
 const outputFile = args.output || path.join(runsDir, `season-${timestamp}.jsonl`);
 const maxGames = parseInt(args["max-games"], 10);
 const quiet = args.quiet || false;
+const saveToDb = args["save-db"] || false;
 
 console.log("Tecmo Super Bowl Season Simulator");
 console.log("==================================");
 console.log(`Output:    ${outputFile}`);
 console.log(`Max games: ${maxGames}`);
+if (saveToDb) {
+    console.log(`Database:  Enabled`);
+}
 console.log();
 
 const emulator = new Emulator({
     outputFile,
     maxGames,
 });
+
+// Initialize repository if saving to DB
+const repository = saveToDb ? new SeasonRepository() : null;
+let seasonId = null;
 
 // Track stats for summary
 let gameCount = 0;
@@ -82,6 +93,12 @@ function updateRecords(game) {
 }
 
 try {
+    // Create season record if saving to DB
+    if (repository) {
+        seasonId = await repository.create_season(maxGames);
+        console.log(`Created season record: ${seasonId}`);
+    }
+
     const results = await emulator.run({
         maxGames,
         outputFile,
@@ -98,11 +115,31 @@ try {
                 }
             }
         },
+        onGame: async (game, gameNumber) => {
+            if (repository && seasonId) {
+                try {
+                    await repository.save_game(seasonId, game);
+                    if (!quiet) {
+                        console.log(`  Saved game ${gameNumber} to database`);
+                    }
+                } catch (err) {
+                    console.error(`  Failed to save game ${gameNumber}: ${err.message}`);
+                }
+            }
+        },
     });
 
     // Compute standings from full results
     gameCount = results.length;
     results.forEach(game => updateRecords(game));
+
+    // Finalize season in database
+    if (repository && seasonId) {
+        console.log("\nUpdating team season stats...");
+        await repository.update_team_season_stats(seasonId);
+        await repository.complete_season(seasonId, gameCount);
+        console.log(`Season ${seasonId} saved to database`);
+    }
 
     const elapsed = ((Date.now() - startTime) / 1000).toFixed(1);
 
@@ -137,6 +174,40 @@ try {
     }
 } catch (error) {
     console.error(`\nFailed: ${error.message}`);
+
+    // Log crash with full diagnostics
+    if (repository && seasonId) {
+        // Classify the error source from the message
+        let error_source = "unknown";
+        if (error.message.includes("nesl exited") || error.message.includes("Failed to start nesl")) {
+            error_source = "emulator";
+        } else if (error.message.includes("SQLITE") || error.message.includes("insert") || error.message.includes("constraint")) {
+            error_source = "database";
+        } else if (error.message.includes("ENOMEM") || error.message.includes("ERR_")) {
+            error_source = "node";
+        }
+
+        try {
+            await repository.log_crash({
+                season_id: seasonId,
+                games_completed: gameCount,
+                last_week: currentWeek >= 0 ? currentWeek + 1 : null,
+                error_message: error.message,
+                error_stack: error.stack,
+                emulator_stderr: emulator.lastStderr || null,
+                error_source: error_source,
+            });
+            console.error(`Crash logged for season ${seasonId}`);
+        } catch (crash_err) {
+            console.error(`Failed to log crash: ${crash_err.message}`);
+        }
+    }
+
     emulator.forceStop();
     process.exit(1);
+} finally {
+    // Close database connection
+    if (db && db.destroy) {
+        await db.destroy();
+    }
 }

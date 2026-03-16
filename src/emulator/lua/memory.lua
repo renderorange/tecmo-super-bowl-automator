@@ -214,17 +214,17 @@ local function getTeamSeasonBase(team_id)
 end
 
 -- Read a team's current season record from SRAM
--- Returns: {wins, losses, ties, pts_for, pts_against, pass_yds_allowed, rush_yds_allowed}
+-- Returns: {wins, losses, ties, points_for, points_against, passing_yards_allowed, rushing_yards_allowed}
 local function readTeamRecord(team_id)
     local base = getTeamSeasonBase(team_id)
     return {
         wins = memory.readbyte(base + SRAM.SEASON_WINS_OFFSET),
         losses = memory.readbyte(base + SRAM.SEASON_LOSSES_OFFSET),
         ties = memory.readbyte(base + SRAM.SEASON_TIES_OFFSET),
-        pts_for = read16(base + SRAM.SEASON_PTS_FOR_OFFSET),
-        pts_against = read16(base + SRAM.SEASON_PTS_AGAINST_OFFSET),
-        pass_yds_allowed = read16(base + SRAM.SEASON_PASS_YDS_ALLOWED_OFFSET),
-        rush_yds_allowed = read16(base + SRAM.SEASON_RUSH_YDS_ALLOWED_OFFSET),
+        points_for = read16(base + SRAM.SEASON_PTS_FOR_OFFSET),
+        points_against = read16(base + SRAM.SEASON_PTS_AGAINST_OFFSET),
+        passing_yards_allowed = read16(base + SRAM.SEASON_PASS_YDS_ALLOWED_OFFSET),
+        rushing_yards_allowed = read16(base + SRAM.SEASON_RUSH_YDS_ALLOWED_OFFSET),
     }
 end
 

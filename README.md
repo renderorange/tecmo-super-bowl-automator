@@ -15,6 +15,9 @@ npm run simulate
 # Or with options:
 node scripts/run-season.js --max-games 42 -o runs/test.jsonl --quiet
 
+# Save results to database (SQLite):
+node scripts/run-season.js --save-db
+
 # Or run the Lua controller directly:
 /tmp/nesl/build/nesl src/emulator/lua/controller.lua \
   ~/roms/nes/Tecmo\ Super\ Bowl\ \(USA\).nes
@@ -25,15 +28,14 @@ Output is JSONL (one JSON object per game) written to `runs/season-{timestamp}.j
 ### What's captured per game
 
 - Final score (authoritative total from RAM)
-- **Pre-game records** for both teams: W-L-T, points for/against (from SRAM season standings, for determining the underdog)
+- **Pre-game records** for both teams: W-L-T, points_for, points_against (from SRAM season standings)
 - Per-player stats for all 25 roster positions on both teams:
-  - **QB**: pass att/comp/TD/INT/yds, rush att/yds/TD
-  - **RB/WR/TE**: rush att/yds/TD, rec/yds/TD, kick return att/yds/TD, punt return att/yds/TD
-  - **DEF** (11 positions): sacks, INTs, INT return yds/TD
-  - **K**: XP att/made, FG att/made
-  - **P**: punts, punt yds
-- Team totals (derived from player stats): rush/pass/rec yards and TDs, sacks, INTs, KR/PR TDs
-- **Untracked points**: the gap between the actual score and the sum of tracked scoring events (fumble recovery TDs, safeties, blocked kick return TDs -- events TSB doesn't attribute to individual players)
+  - **QB**: passing_attempts/completions/yards/TDs, interceptions_thrown, rushing_attempts/yards/TDs
+  - **RB/WR/TE**: rushing_attempts/yards/TDs, receptions/rec_yds/rec_tds, kick_return_attempts/yards/TDs, punt_return_attempts/yards/TDs
+  - **DEF** (11 positions): sacks, interceptions, interception_return_yards/TDs
+  - **K**: xp_attempts/made, fg_attempts/made
+  - **P**: punts, punt_yards
+- Team totals (derived from player stats): rushing/passing/receiving yards and TDs, sacks, interceptions, KR/PR TDs, tracked_pts, untracked_pts
 - Week and game-in-week index
 
 ### Performance
@@ -49,9 +51,8 @@ Output is JSONL (one JSON object per game) written to `runs/season-{timestamp}.j
 
 ### Remaining work
 
-1. Database integration -- parse JSONL and insert into SQLite tables
-2. Multi-season runs -- run N seasons for statistical analysis
-3. Visualization -- charts comparing TSB engine output vs real 1991 NFL stats
+1. Multi-season runs -- run N seasons for statistical analysis
+2. Visualization -- charts comparing TSB engine output vs real 1991 NFL stats
 
 ## Emulator: nesl
 
@@ -159,19 +160,17 @@ The hardest part of the implementation. Key considerations:
 | `$B9` | 2 | Pass yards allowed (16-bit LE) |
 | `$BB` | 2 | Rush yards allowed (16-bit LE) |
 
-### Player stat byte layout (SRAM)
+### Player stat keys (Lua output → DB columns)
 
-Each team's 242-byte stat block contains:
+JSONL output keys match database columns 1:1:
 
-| Position | Count | Bytes each | Stat fields |
-|----------|-------|------------|-------------|
-| QB | 2 | 10 | att, comp, TD, INT, yds(16), rush att, rush yds(16), rush TD |
-| RB | 4 | 16 | rec, rec yds(16), rec TD, KR att/yds(16)/TD, PR att/yds(16)/TD, rush att, rush yds(16), rush TD |
-| WR | 4 | 16 | (same as RB) |
-| TE | 2 | 16 | (same as RB) |
-| DEF | 11 | 5 | sacks, INTs, INT yds(16), INT TD |
-| K | 1 | 4 | XP att/made, FG att/made |
-| P | 1 | 3 | punts, punt yds(16) |
+| Position | Keys |
+|----------|------|
+| QB | passing_attempts, passing_completions, passing_yards, passing_tds, interceptions_thrown, rushing_attempts, rushing_yards, rushing_tds |
+| RB/WR/TE | rushing_attempts, rushing_yards, rushing_tds, receptions, receiving_yards, receiving_tds, kick_return_attempts, kick_return_yards, kick_return_tds, punt_return_attempts, punt_return_yards, punt_return_tds |
+| DEF | sacks, interceptions, interception_return_yards, interception_return_tds |
+| K | xp_attempts, xp_made, fg_attempts, fg_made |
+| P | punts, punt_yards |
 
 All yardage stats are 16-bit little-endian (low byte, high byte).
 

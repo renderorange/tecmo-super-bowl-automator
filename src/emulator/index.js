@@ -24,6 +24,7 @@ export class Emulator {
 
         this.process = null;
         this.running = false;
+        this.lastStderr = "";
     }
 
     /**
@@ -62,6 +63,8 @@ export class Emulator {
             TSB_MAX_GAMES: String(maxGames),
         };
 
+        this.lastStderr = "";
+
         this.process = spawn(this.neslPath, [this.luaScript, this.romPath], {
             env,
             stdio: ["ignore", "pipe", "pipe"],
@@ -73,15 +76,18 @@ export class Emulator {
         return new Promise((resolve, reject) => {
             // Parse stdout line-by-line for progress reporting
             const rl = readline.createInterface({ input: this.process.stdout });
-            rl.on("line", (line) => {
+            rl.on("line", async (line) => {
                 if (onProgress) {
                     onProgress(line);
                 }
                 // When a game completes, the Lua script prints "Game N: ..."
                 // and writes a JSON line to the output file.
-                // We can parse the output file at the end, or stream it.
                 if (line.startsWith("Game ") && onGame) {
-                    // Read the latest line from the output file
+                    // Pause readline to ensure sequential processing of
+                    // async callbacks (e.g., database writes). Without this,
+                    // the next line event fires immediately and callbacks
+                    // run concurrently.
+                    rl.pause();
                     try {
                         const content = fs.readFileSync(outputFile, "utf8").trim();
                         const lines = content.split("\n");
@@ -89,18 +95,18 @@ export class Emulator {
                         if (lastLine) {
                             const parsed = JSON.parse(lastLine);
                             games.push(parsed);
-                            onGame(parsed, games.length);
+                            await onGame(parsed, games.length);
                         }
                     } catch (e) {
                         // File may not be written yet, ignore
                     }
+                    rl.resume();
                 }
             });
 
-            // Capture stderr
-            let stderrBuf = "";
+            // Capture stderr for crash diagnostics
             this.process.stderr.on("data", (data) => {
-                stderrBuf += data.toString();
+                this.lastStderr += data.toString();
             });
 
             this.process.on("close", (code) => {
@@ -108,8 +114,9 @@ export class Emulator {
                 this.process = null;
 
                 if (code !== 0 && code !== null) {
+                    const stderrTrimmed = this.lastStderr.trim();
                     reject(new Error(
-                        `nesl exited with code ${code}${stderrBuf ? ": " + stderrBuf.trim() : ""}`,
+                        `nesl exited with code ${code}${stderrTrimmed ? ": " + stderrTrimmed : ""}`,
                     ));
                     return;
                 }

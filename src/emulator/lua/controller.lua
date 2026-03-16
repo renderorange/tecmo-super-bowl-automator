@@ -72,48 +72,48 @@ end
 
 local function readQBStats(base)
     return {
-        pass_att = memory.readbyte(base + mem.QB_STAT.PASS_ATT),
-        pass_comp = memory.readbyte(base + mem.QB_STAT.PASS_COMP),
-        pass_td = memory.readbyte(base + mem.QB_STAT.PASS_TD),
-        pass_int = memory.readbyte(base + mem.QB_STAT.PASS_INT),
-        pass_yds = mem.read16(base + mem.QB_STAT.PASS_YDS_LO),
-        rush_att = memory.readbyte(base + mem.QB_STAT.RUSH_ATT),
-        rush_yds = mem.read16(base + mem.QB_STAT.RUSH_YDS_LO),
-        rush_td = memory.readbyte(base + mem.QB_STAT.RUSH_TD),
+        passing_attempts = memory.readbyte(base + mem.QB_STAT.PASS_ATT),
+        passing_completions = memory.readbyte(base + mem.QB_STAT.PASS_COMP),
+        passing_tds = memory.readbyte(base + mem.QB_STAT.PASS_TD),
+        interceptions_thrown = memory.readbyte(base + mem.QB_STAT.PASS_INT),
+        passing_yards = mem.read16(base + mem.QB_STAT.PASS_YDS_LO),
+        rushing_attempts = memory.readbyte(base + mem.QB_STAT.RUSH_ATT),
+        rushing_yards = mem.read16(base + mem.QB_STAT.RUSH_YDS_LO),
+        rushing_tds = memory.readbyte(base + mem.QB_STAT.RUSH_TD),
     }
 end
 
 local function readSkillStats(base)
     return {
-        rec = memory.readbyte(base + mem.SKILL_STAT.REC),
-        rec_yds = mem.read16(base + mem.SKILL_STAT.REC_YDS_LO),
-        rec_td = memory.readbyte(base + mem.SKILL_STAT.REC_TD),
-        rush_att = memory.readbyte(base + mem.SKILL_STAT.RUSH_ATT),
-        rush_yds = mem.read16(base + mem.SKILL_STAT.RUSH_YDS_LO),
-        rush_td = memory.readbyte(base + mem.SKILL_STAT.RUSH_TD),
-        kr_att = memory.readbyte(base + mem.SKILL_STAT.KR_ATT),
-        kr_yds = mem.read16(base + mem.SKILL_STAT.KR_YDS_LO),
-        kr_td = memory.readbyte(base + mem.SKILL_STAT.KR_TD),
-        pr_att = memory.readbyte(base + mem.SKILL_STAT.PR_ATT),
-        pr_yds = mem.read16(base + mem.SKILL_STAT.PR_YDS_LO),
-        pr_td = memory.readbyte(base + mem.SKILL_STAT.PR_TD),
+        receptions = memory.readbyte(base + mem.SKILL_STAT.REC),
+        receiving_yards = mem.read16(base + mem.SKILL_STAT.REC_YDS_LO),
+        receiving_tds = memory.readbyte(base + mem.SKILL_STAT.REC_TD),
+        rushing_attempts = memory.readbyte(base + mem.SKILL_STAT.RUSH_ATT),
+        rushing_yards = mem.read16(base + mem.SKILL_STAT.RUSH_YDS_LO),
+        rushing_tds = memory.readbyte(base + mem.SKILL_STAT.RUSH_TD),
+        kick_return_attempts = memory.readbyte(base + mem.SKILL_STAT.KR_ATT),
+        kick_return_yards = mem.read16(base + mem.SKILL_STAT.KR_YDS_LO),
+        kick_return_tds = memory.readbyte(base + mem.SKILL_STAT.KR_TD),
+        punt_return_attempts = memory.readbyte(base + mem.SKILL_STAT.PR_ATT),
+        punt_return_yards = mem.read16(base + mem.SKILL_STAT.PR_YDS_LO),
+        punt_return_tds = memory.readbyte(base + mem.SKILL_STAT.PR_TD),
     }
 end
 
 local function readDefStats(base)
     return {
         sacks = memory.readbyte(base + mem.DEF_STAT.SACKS),
-        ints = memory.readbyte(base + mem.DEF_STAT.INTS),
-        int_yds = mem.read16(base + mem.DEF_STAT.INT_YDS_LO),
-        int_td = memory.readbyte(base + mem.DEF_STAT.INT_TD),
+        interceptions = memory.readbyte(base + mem.DEF_STAT.INTS),
+        interception_return_yards = mem.read16(base + mem.DEF_STAT.INT_YDS_LO),
+        interception_return_tds = memory.readbyte(base + mem.DEF_STAT.INT_TD),
     }
 end
 
 local function readKStats(base)
     return {
-        xp_att = memory.readbyte(base + mem.K_STAT.XP_ATT),
+        xp_attempts = memory.readbyte(base + mem.K_STAT.XP_ATT),
         xp_made = memory.readbyte(base + mem.K_STAT.XP_MADE),
-        fg_att = memory.readbyte(base + mem.K_STAT.FG_ATT),
+        fg_attempts = memory.readbyte(base + mem.K_STAT.FG_ATT),
         fg_made = memory.readbyte(base + mem.K_STAT.FG_MADE),
     }
 end
@@ -121,7 +121,7 @@ end
 local function readPStats(base)
     return {
         punts = memory.readbyte(base + mem.P_STAT.PUNTS),
-        punt_yds = mem.read16(base + mem.P_STAT.PUNT_YDS_LO),
+        punt_yards = mem.read16(base + mem.P_STAT.PUNT_YDS_LO),
     }
 end
 
@@ -180,59 +180,59 @@ local function readGameStats()
     -- Derive team totals from player stats
     for _, side in ipairs({"p1", "p2"}) do
         local p = result[side .. "_players"]
-        local rush_att, rush_yds, rush_td = 0, 0, 0
-        local pass_att, pass_comp, pass_yds, pass_td, pass_int = 0, 0, 0, 0, 0
-        local rec, rec_yds, rec_td = 0, 0, 0
-        local sacks, ints, int_yds, int_td = 0, 0, 0, 0
+        local rushing_attempts, rushing_yards, rushing_tds = 0, 0, 0
+        local passing_attempts, passing_completions, passing_yards, passing_tds, interceptions_thrown = 0, 0, 0, 0, 0
+        local receptions, receiving_yards, receiving_tds = 0, 0, 0
+        local sacks, interceptions, interception_return_yards, interception_return_tds = 0, 0, 0, 0
 
         -- QBs
         for _, qb in ipairs({p.qb1, p.qb2}) do
-            pass_att = pass_att + qb.pass_att
-            pass_comp = pass_comp + qb.pass_comp
-            pass_yds = pass_yds + qb.pass_yds
-            pass_td = pass_td + qb.pass_td
-            pass_int = pass_int + qb.pass_int
-            rush_att = rush_att + qb.rush_att
-            rush_yds = rush_yds + qb.rush_yds
-            rush_td = rush_td + qb.rush_td
+            passing_attempts = passing_attempts + qb.passing_attempts
+            passing_completions = passing_completions + qb.passing_completions
+            passing_yards = passing_yards + qb.passing_yards
+            passing_tds = passing_tds + qb.passing_tds
+            interceptions_thrown = interceptions_thrown + qb.interceptions_thrown
+            rushing_attempts = rushing_attempts + qb.rushing_attempts
+            rushing_yards = rushing_yards + qb.rushing_yards
+            rushing_tds = rushing_tds + qb.rushing_tds
         end
 
         -- Skill positions (RB, WR, TE)
         for _, key in ipairs({"rb1","rb2","rb3","rb4","wr1","wr2","wr3","wr4","te1","te2"}) do
             local sk = p[key]
-            rush_att = rush_att + sk.rush_att
-            rush_yds = rush_yds + sk.rush_yds
-            rush_td = rush_td + sk.rush_td
-            rec = rec + sk.rec
-            rec_yds = rec_yds + sk.rec_yds
-            rec_td = rec_td + sk.rec_td
+            rushing_attempts = rushing_attempts + sk.rushing_attempts
+            rushing_yards = rushing_yards + sk.rushing_yards
+            rushing_tds = rushing_tds + sk.rushing_tds
+            receptions = receptions + sk.receptions
+            receiving_yards = receiving_yards + sk.receiving_yards
+            receiving_tds = receiving_tds + sk.receiving_tds
         end
 
         -- Defensive positions
         for _, key in ipairs({"re","nt","le","rolb","rilb","lilb","lolb","rcb","lcb","fs","ss"}) do
             local d = p[key]
             sacks = sacks + d.sacks
-            ints = ints + d.ints
-            int_yds = int_yds + d.int_yds
-            int_td = int_td + d.int_td
+            interceptions = interceptions + d.interceptions
+            interception_return_yards = interception_return_yards + d.interception_return_yards
+            interception_return_tds = interception_return_tds + d.interception_return_tds
         end
 
         result[side .. "_team_stats"] = {
-            rush_att = rush_att,
-            rush_yds = rush_yds,
-            rush_td = rush_td,
-            pass_att = pass_att,
-            pass_comp = pass_comp,
-            pass_yds = pass_yds,
-            pass_td = pass_td,
-            pass_int = pass_int,
-            rec = rec,
-            rec_yds = rec_yds,
-            rec_td = rec_td,
+            rushing_attempts = rushing_attempts,
+            rushing_yards = rushing_yards,
+            rushing_tds = rushing_tds,
+            passing_attempts = passing_attempts,
+            passing_completions = passing_completions,
+            passing_yards = passing_yards,
+            passing_tds = passing_tds,
+            interceptions_thrown = interceptions_thrown,
+            receptions = receptions,
+            receiving_yards = receiving_yards,
+            receiving_tds = receiving_tds,
             sacks = sacks,
-            ints = ints,
-            int_yds = int_yds,
-            int_td = int_td,
+            interceptions = interceptions,
+            interception_return_yards = interception_return_yards,
+            interception_return_tds = interception_return_tds,
             k = p.k,
             punting = p.p,
         }
@@ -245,18 +245,18 @@ local function readGameStats()
         local ts = result[side .. "_team_stats"]
         local score = result[side .. "_score"]
         -- Total TDs from player stats
-        local tracked_td = ts.rush_td + ts.rec_td + ts.int_td
+        local tracked_td = ts.rushing_tds + ts.receiving_tds + ts.interception_return_tds
         -- Add KR/PR TDs from skill players
         local p = result[side .. "_players"]
-        local kr_td, pr_td = 0, 0
+        local kick_return_tds, punt_return_tds = 0, 0
         for _, key in ipairs({"rb1","rb2","rb3","rb4","wr1","wr2","wr3","wr4","te1","te2"}) do
-            kr_td = kr_td + p[key].kr_td
-            pr_td = pr_td + p[key].pr_td
+            kick_return_tds = kick_return_tds + p[key].kick_return_tds
+            punt_return_tds = punt_return_tds + p[key].punt_return_tds
         end
-        local total_tracked_td = tracked_td + kr_td + pr_td
+        local total_tracked_td = tracked_td + kick_return_tds + punt_return_tds
         local tracked_pts = total_tracked_td * 6 + ts.k.xp_made + ts.k.fg_made * 3
-        ts.kr_td = kr_td
-        ts.pr_td = pr_td
+        ts.kick_return_tds = kick_return_tds
+        ts.punt_return_tds = punt_return_tds
         ts.total_td = total_tracked_td
         ts.tracked_pts = tracked_pts
         ts.untracked_pts = score - tracked_pts
