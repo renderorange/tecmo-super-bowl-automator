@@ -109,9 +109,12 @@ describe("Emulator", () => {
             fs.writeFileSync(TEST_OUTPUT_FILE, JSON.stringify(game) + "\n");
             emulator = new Emulator({ outputFile: TEST_OUTPUT_FILE });
             const results = emulator.parseResults();
-            expect(results).toHaveLength(1);
-            expect(results[0].p1_team).toBe("PHI");
-            expect(results[0].p1_score).toBe(41);
+            expect(results)
+                .toHaveLength(1);
+            expect(results[0].p1_team)
+                .toBe("PHI");
+            expect(results[0].p1_score)
+                .toBe(41);
         });
 
         test("parses multiple JSON lines", () => {
@@ -120,23 +123,31 @@ describe("Emulator", () => {
                 { p1_team: "PHX", p2_team: "NO", p1_score: 3, p2_score: 39 },
                 { p1_team: "NE", p2_team: "TB", p1_score: 53, p2_score: 21 },
             ];
-            fs.writeFileSync(TEST_OUTPUT_FILE, games.map(g => JSON.stringify(g)).join("\n") + "\n");
+            fs.writeFileSync(TEST_OUTPUT_FILE, games.map((g) => JSON.stringify(g))
+                .join("\n") + "\n");
             emulator = new Emulator({ outputFile: TEST_OUTPUT_FILE });
             const results = emulator.parseResults();
-            expect(results).toHaveLength(3);
-            expect(results[0].p1_team).toBe("PHI");
-            expect(results[1].p1_team).toBe("PHX");
-            expect(results[2].p1_team).toBe("NE");
+            expect(results)
+                .toHaveLength(3);
+            expect(results[0].p1_team)
+                .toBe("PHI");
+            expect(results[1].p1_team)
+                .toBe("PHX");
+            expect(results[2].p1_team)
+                .toBe("NE");
         });
 
         test("skips malformed JSON lines", () => {
-            const content = '{"p1_team":"PHI"}\nnot json\n{"p1_team":"GB"}\n';
+            const content = "{\"p1_team\":\"PHI\"}\nnot json\n{\"p1_team\":\"GB\"}\n";
             fs.writeFileSync(TEST_OUTPUT_FILE, content);
             emulator = new Emulator({ outputFile: TEST_OUTPUT_FILE });
             const results = emulator.parseResults();
-            expect(results).toHaveLength(2);
-            expect(results[0].p1_team).toBe("PHI");
-            expect(results[1].p1_team).toBe("GB");
+            expect(results)
+                .toHaveLength(2);
+            expect(results[0].p1_team)
+                .toBe("PHI");
+            expect(results[1].p1_team)
+                .toBe("GB");
         });
 
         test("accepts custom file path argument", () => {
@@ -145,8 +156,10 @@ describe("Emulator", () => {
             fs.writeFileSync(altFile, JSON.stringify(game) + "\n");
             emulator = new Emulator();
             const results = emulator.parseResults(altFile);
-            expect(results).toHaveLength(1);
-            expect(results[0].p1_team).toBe("BUF");
+            expect(results)
+                .toHaveLength(1);
+            expect(results[0].p1_team)
+                .toBe("BUF");
             fs.unlinkSync(altFile);
         });
     });

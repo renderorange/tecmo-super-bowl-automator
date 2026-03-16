@@ -26,32 +26,48 @@ afterAll(async () => {
 
 beforeEach(async () => {
     // Clean up test data
-    await db("season_crashes").del();
-    await db("injuries").del();
-    await db("player_game_stats").del();
-    await db("games").del();
-    await db("team_season_stats").del();
-    await db("seasons").del();
+    await db("season_crashes")
+        .del();
+    await db("injuries")
+        .del();
+    await db("player_game_stats")
+        .del();
+    await db("games")
+        .del();
+    await db("team_season_stats")
+        .del();
+    await db("seasons")
+        .del();
 });
 
 describe("SeasonRepository.create_season", () => {
     test("creates a season with default total games", async () => {
         const season_id = await repository.create_season();
 
-        expect(season_id).toBeDefined();
-        expect(typeof season_id).toBe("number");
+        expect(season_id)
+            .toBeDefined();
+        expect(typeof season_id)
+            .toBe("number");
 
-        const season = await db("seasons").where("id", season_id).first();
-        expect(season).toBeDefined();
-        expect(season.status).toBe("running");
-        expect(season.total_games).toBe(238);
+        const season = await db("seasons")
+            .where("id", season_id)
+            .first();
+        expect(season)
+            .toBeDefined();
+        expect(season.status)
+            .toBe("running");
+        expect(season.total_games)
+            .toBe(238);
     });
 
     test("creates a season with custom total games", async () => {
         const season_id = await repository.create_season(42);
 
-        const season = await db("seasons").where("id", season_id).first();
-        expect(season.total_games).toBe(42);
+        const season = await db("seasons")
+            .where("id", season_id)
+            .first();
+        expect(season.total_games)
+            .toBe(42);
     });
 });
 
@@ -61,10 +77,15 @@ describe("SeasonRepository.complete_season", () => {
 
         await repository.complete_season(season_id, 100);
 
-        const season = await db("seasons").where("id", season_id).first();
-        expect(season.status).toBe("completed");
-        expect(season.games_completed).toBe(100);
-        expect(season.completed_at).toBeDefined();
+        const season = await db("seasons")
+            .where("id", season_id)
+            .first();
+        expect(season.status)
+            .toBe("completed");
+        expect(season.games_completed)
+            .toBe(100);
+        expect(season.completed_at)
+            .toBeDefined();
     });
 });
 
@@ -74,8 +95,11 @@ describe("SeasonRepository.fail_season", () => {
 
         await repository.fail_season(season_id);
 
-        const season = await db("seasons").where("id", season_id).first();
-        expect(season.status).toBe("failed");
+        const season = await db("seasons")
+            .where("id", season_id)
+            .first();
+        expect(season.status)
+            .toBe("failed");
     });
 });
 
@@ -98,15 +122,24 @@ describe("SeasonRepository.save_game", () => {
 
         const game_id = await repository.save_game(season_id, game_data);
 
-        expect(game_id).toBeDefined();
+        expect(game_id)
+            .toBeDefined();
 
-        const game = await db("games").where("id", game_id).first();
-        expect(game.season_id).toBe(season_id);
-        expect(game.week).toBe(1); // Converted to 1-based
-        expect(game.home_team_id).toBe(0);
-        expect(game.away_team_id).toBe(1);
-        expect(game.home_score).toBe(21);
-        expect(game.away_score).toBe(14);
+        const game = await db("games")
+            .where("id", game_id)
+            .first();
+        expect(game.season_id)
+            .toBe(season_id);
+        expect(game.week)
+            .toBe(1); // Converted to 1-based
+        expect(game.home_team_id)
+            .toBe(0);
+        expect(game.away_team_id)
+            .toBe(1);
+        expect(game.home_score)
+            .toBe(21);
+        expect(game.away_score)
+            .toBe(14);
     });
 
     test("saves player stats for QB", async () => {
@@ -142,20 +175,29 @@ describe("SeasonRepository.save_game", () => {
         const qb = await db("players")
             .where({ team_id: 0, position_detail: "QB1" })
             .first();
-        expect(qb).toBeDefined();
+        expect(qb)
+            .toBeDefined();
 
         const stats = await db("player_game_stats")
             .where("player_id", qb.id)
             .first();
 
-        expect(stats).toBeDefined();
-        expect(stats.passing_attempts).toBe(25);
-        expect(stats.passing_completions).toBe(15);
-        expect(stats.passing_yards).toBe(210);
-        expect(stats.passing_tds).toBe(2);
-        expect(stats.interceptions_thrown).toBe(1);
-        expect(stats.rushing_attempts).toBe(3);
-        expect(stats.rushing_yards).toBe(15);
+        expect(stats)
+            .toBeDefined();
+        expect(stats.passing_attempts)
+            .toBe(25);
+        expect(stats.passing_completions)
+            .toBe(15);
+        expect(stats.passing_yards)
+            .toBe(210);
+        expect(stats.passing_tds)
+            .toBe(2);
+        expect(stats.interceptions_thrown)
+            .toBe(1);
+        expect(stats.rushing_attempts)
+            .toBe(3);
+        expect(stats.rushing_yards)
+            .toBe(15);
     });
 
     test("saves player stats for RB", async () => {
@@ -194,22 +236,33 @@ describe("SeasonRepository.save_game", () => {
         const rb = await db("players")
             .where({ team_id: 0, position_detail: "RB1" })
             .first();
-        expect(rb).toBeDefined();
+        expect(rb)
+            .toBeDefined();
 
         const stats = await db("player_game_stats")
             .where("player_id", rb.id)
             .first();
 
-        expect(stats).toBeDefined();
-        expect(stats.rushing_attempts).toBe(20);
-        expect(stats.rushing_yards).toBe(120);
-        expect(stats.rushing_tds).toBe(1);
-        expect(stats.receptions).toBe(3);
-        expect(stats.receiving_yards).toBe(25);
-        expect(stats.kick_return_attempts).toBe(2);
-        expect(stats.kick_return_yards).toBe(45);
-        expect(stats.punt_return_attempts).toBe(1);
-        expect(stats.punt_return_yards).toBe(10);
+        expect(stats)
+            .toBeDefined();
+        expect(stats.rushing_attempts)
+            .toBe(20);
+        expect(stats.rushing_yards)
+            .toBe(120);
+        expect(stats.rushing_tds)
+            .toBe(1);
+        expect(stats.receptions)
+            .toBe(3);
+        expect(stats.receiving_yards)
+            .toBe(25);
+        expect(stats.kick_return_attempts)
+            .toBe(2);
+        expect(stats.kick_return_yards)
+            .toBe(45);
+        expect(stats.punt_return_attempts)
+            .toBe(1);
+        expect(stats.punt_return_yards)
+            .toBe(10);
     });
 
     test("saves player stats for defense", async () => {
@@ -240,17 +293,23 @@ describe("SeasonRepository.save_game", () => {
         const lb = await db("players")
             .where({ team_id: 1, position_detail: "RILB" })
             .first();
-        expect(lb).toBeDefined();
+        expect(lb)
+            .toBeDefined();
 
         const stats = await db("player_game_stats")
             .where("player_id", lb.id)
             .first();
 
-        expect(stats).toBeDefined();
-        expect(stats.sacks).toBe(2);
-        expect(stats.interceptions).toBe(1);
-        expect(stats.interception_return_yards).toBe(25);
-        expect(stats.interception_return_tds).toBe(1);
+        expect(stats)
+            .toBeDefined();
+        expect(stats.sacks)
+            .toBe(2);
+        expect(stats.interceptions)
+            .toBe(1);
+        expect(stats.interception_return_yards)
+            .toBe(25);
+        expect(stats.interception_return_tds)
+            .toBe(1);
     });
 
     test("saves player stats for kicker", async () => {
@@ -281,17 +340,23 @@ describe("SeasonRepository.save_game", () => {
         const kicker = await db("players")
             .where({ team_id: 0, position_detail: "K" })
             .first();
-        expect(kicker).toBeDefined();
+        expect(kicker)
+            .toBeDefined();
 
         const stats = await db("player_game_stats")
             .where("player_id", kicker.id)
             .first();
 
-        expect(stats).toBeDefined();
-        expect(stats.xp_attempts).toBe(3);
-        expect(stats.xp_made).toBe(3);
-        expect(stats.fg_attempts).toBe(2);
-        expect(stats.fg_made).toBe(1);
+        expect(stats)
+            .toBeDefined();
+        expect(stats.xp_attempts)
+            .toBe(3);
+        expect(stats.xp_made)
+            .toBe(3);
+        expect(stats.fg_attempts)
+            .toBe(2);
+        expect(stats.fg_made)
+            .toBe(1);
     });
 
     test("saves player stats for punter", async () => {
@@ -320,15 +385,19 @@ describe("SeasonRepository.save_game", () => {
         const punter = await db("players")
             .where({ team_id: 0, position_detail: "P" })
             .first();
-        expect(punter).toBeDefined();
+        expect(punter)
+            .toBeDefined();
 
         const stats = await db("player_game_stats")
             .where("player_id", punter.id)
             .first();
 
-        expect(stats).toBeDefined();
-        expect(stats.punts).toBe(5);
-        expect(stats.punt_yards).toBe(210);
+        expect(stats)
+            .toBeDefined();
+        expect(stats.punts)
+            .toBe(5);
+        expect(stats.punt_yards)
+            .toBe(210);
     });
 });
 
@@ -346,26 +415,36 @@ describe("SeasonRepository.log_crash", () => {
             error_source: "emulator",
         });
 
-        expect(crash_id).toBeDefined();
-        expect(typeof crash_id).toBe("number");
+        expect(crash_id)
+            .toBeDefined();
+        expect(typeof crash_id)
+            .toBe("number");
 
         // Verify crash record
         const crash = await db("season_crashes")
             .where("id", crash_id)
             .first();
-        expect(crash.season_id).toBe(season_id);
-        expect(crash.games_completed).toBe(42);
-        expect(crash.last_week).toBe(3);
-        expect(crash.error_message).toBe("nesl exited with code 139: segfault");
-        expect(crash.error_stack).toContain("Emulator.run");
-        expect(crash.emulator_stderr).toBe("Segmentation fault (core dumped)");
-        expect(crash.error_source).toBe("emulator");
+        expect(crash.season_id)
+            .toBe(season_id);
+        expect(crash.games_completed)
+            .toBe(42);
+        expect(crash.last_week)
+            .toBe(3);
+        expect(crash.error_message)
+            .toBe("nesl exited with code 139: segfault");
+        expect(crash.error_stack)
+            .toContain("Emulator.run");
+        expect(crash.emulator_stderr)
+            .toBe("Segmentation fault (core dumped)");
+        expect(crash.error_source)
+            .toBe("emulator");
 
         // Verify season is marked as failed
         const season = await db("seasons")
             .where("id", season_id)
             .first();
-        expect(season.status).toBe("failed");
+        expect(season.status)
+            .toBe("failed");
     });
 
     test("requires season_id", async () => {
@@ -384,9 +463,12 @@ describe("SeasonRepository.log_crash", () => {
         const crash = await db("season_crashes")
             .where("id", crash_id)
             .first();
-        expect(crash.season_id).toBe(season_id);
-        expect(crash.games_completed).toBe(0);
-        expect(crash.error_source).toBe("unknown");
+        expect(crash.season_id)
+            .toBe(season_id);
+        expect(crash.games_completed)
+            .toBe(0);
+        expect(crash.error_source)
+            .toBe("unknown");
     });
 });
 
@@ -421,12 +503,18 @@ describe("SeasonRepository.update_team_season_stats", () => {
             .where({ season_id, team_id: 0 })
             .first();
 
-        expect(team0_stats.wins).toBe(1);
-        expect(team0_stats.losses).toBe(1);
-        expect(team0_stats.points_for).toBe(31);
-        expect(team0_stats.points_against).toBe(38);
-        expect(team0_stats.home_wins).toBe(1);
-        expect(team0_stats.home_losses).toBe(1);
+        expect(team0_stats.wins)
+            .toBe(1);
+        expect(team0_stats.losses)
+            .toBe(1);
+        expect(team0_stats.points_for)
+            .toBe(31);
+        expect(team0_stats.points_against)
+            .toBe(38);
+        expect(team0_stats.home_wins)
+            .toBe(1);
+        expect(team0_stats.home_losses)
+            .toBe(1);
     });
 
     test("handles ties correctly", async () => {
@@ -448,9 +536,12 @@ describe("SeasonRepository.update_team_season_stats", () => {
             .where({ season_id, team_id: 0 })
             .first();
 
-        expect(team0_stats.ties).toBe(1);
-        expect(team0_stats.wins).toBe(0);
-        expect(team0_stats.losses).toBe(0);
+        expect(team0_stats.ties)
+            .toBe(1);
+        expect(team0_stats.wins)
+            .toBe(0);
+        expect(team0_stats.losses)
+            .toBe(0);
     });
 });
 
@@ -473,15 +564,20 @@ describe("SeasonRepository.get_season_summary", () => {
 
         const summary = await repository.get_season_summary(season_id);
 
-        expect(summary.season).toBeDefined();
-        expect(summary.standings).toHaveLength(2);
-        expect(summary.standings[0].wins).toBe(1);
-        expect(summary.standings[1].losses).toBe(1);
+        expect(summary.season)
+            .toBeDefined();
+        expect(summary.standings)
+            .toHaveLength(2);
+        expect(summary.standings[0].wins)
+            .toBe(1);
+        expect(summary.standings[1].losses)
+            .toBe(1);
     });
 
     test("returns null for non-existent season", async () => {
         const summary = await repository.get_season_summary(99999);
-        expect(summary).toBeNull();
+        expect(summary)
+            .toBeNull();
     });
 });
 
@@ -490,18 +586,31 @@ describe("POSITION_KEY_MAP", () => {
         const mod = await import("../../src/db/season-repository.js");
         const POSITION_KEY_MAP = mod.POSITION_KEY_MAP;
 
-        expect(POSITION_KEY_MAP.qb1).toBe("QB1");
-        expect(POSITION_KEY_MAP.qb2).toBe("QB2");
-        expect(POSITION_KEY_MAP.rb1).toBe("RB1");
-        expect(POSITION_KEY_MAP.wr1).toBe("WR1");
-        expect(POSITION_KEY_MAP.te1).toBe("TE1");
-        expect(POSITION_KEY_MAP.re).toBe("RE");
-        expect(POSITION_KEY_MAP.nt).toBe("NT");
-        expect(POSITION_KEY_MAP.rolb).toBe("ROLB");
-        expect(POSITION_KEY_MAP.rilb).toBe("RILB");
-        expect(POSITION_KEY_MAP.fs).toBe("FS");
-        expect(POSITION_KEY_MAP.ss).toBe("SS");
-        expect(POSITION_KEY_MAP.k).toBe("K");
-        expect(POSITION_KEY_MAP.p).toBe("P");
+        expect(POSITION_KEY_MAP.qb1)
+            .toBe("QB1");
+        expect(POSITION_KEY_MAP.qb2)
+            .toBe("QB2");
+        expect(POSITION_KEY_MAP.rb1)
+            .toBe("RB1");
+        expect(POSITION_KEY_MAP.wr1)
+            .toBe("WR1");
+        expect(POSITION_KEY_MAP.te1)
+            .toBe("TE1");
+        expect(POSITION_KEY_MAP.re)
+            .toBe("RE");
+        expect(POSITION_KEY_MAP.nt)
+            .toBe("NT");
+        expect(POSITION_KEY_MAP.rolb)
+            .toBe("ROLB");
+        expect(POSITION_KEY_MAP.rilb)
+            .toBe("RILB");
+        expect(POSITION_KEY_MAP.fs)
+            .toBe("FS");
+        expect(POSITION_KEY_MAP.ss)
+            .toBe("SS");
+        expect(POSITION_KEY_MAP.k)
+            .toBe("K");
+        expect(POSITION_KEY_MAP.p)
+            .toBe("P");
     });
 });

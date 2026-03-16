@@ -30,7 +30,10 @@ const args = minimist(process.argv.slice(2), {
 });
 
 // Set up output file
-const timestamp = new Date().toISOString().replace(/[:.]/g, "-").slice(0, 19);
+const timestamp = new Date()
+    .toISOString()
+    .replace(/[:.]/g, "-")
+    .slice(0, 19);
 const runsDir = path.join(projectRoot, "runs");
 fs.mkdirSync(runsDir, { recursive: true });
 
@@ -44,7 +47,7 @@ console.log("==================================");
 console.log(`Output:    ${outputFile}`);
 console.log(`Max games: ${maxGames}`);
 if (saveToDb) {
-    console.log(`Database:  Enabled`);
+    console.log("Database:  Enabled");
 }
 console.log();
 
@@ -64,7 +67,7 @@ const weekResults = {};
 const teamRecords = {};
 const startTime = Date.now();
 
-function updateRecords(game) {
+function updateRecords (game) {
     const p1 = game.p1_team;
     const p2 = game.p2_team;
 
@@ -131,7 +134,7 @@ try {
 
     // Compute standings from full results
     gameCount = results.length;
-    results.forEach(game => updateRecords(game));
+    results.forEach((game) => updateRecords(game));
 
     // Finalize season in database
     if (repository && seasonId) {
@@ -166,9 +169,14 @@ try {
             const diff = rec.pf - rec.pa;
             const diffStr = (diff >= 0 ? "+" : "") + diff;
             console.log(
-                `${team.padEnd(5)} ${String(rec.wins).padStart(2)}  ` +
-                `${String(rec.losses).padStart(2)}  ${String(rec.ties).padStart(2)}  ` +
-                `${String(rec.pf).padStart(4)}  ${String(rec.pa).padStart(4)}  ${diffStr.padStart(5)}`,
+                `${team.padEnd(5)} ${String(rec.wins)
+                    .padStart(2)}  ` +
+                `${String(rec.losses)
+                    .padStart(2)}  ${String(rec.ties)
+                    .padStart(2)}  ` +
+                `${String(rec.pf)
+                    .padStart(4)}  ${String(rec.pa)
+                    .padStart(4)}  ${diffStr.padStart(5)}`,
             );
         }
     }

@@ -51,7 +51,7 @@ export class SeasonRepository {
      * @param {number} totalGames - Expected total games (default: 238)
      * @returns {Promise<number>} The season ID
      */
-    async create_season(total_games = 238) {
+    async create_season (total_games = 238) {
         const [season_id] = await db("seasons")
             .insert({
                 total_games: total_games,
@@ -69,7 +69,7 @@ export class SeasonRepository {
      * @param {number} games_completed
      * @returns {Promise<void>}
      */
-    async complete_season(season_id, games_completed) {
+    async complete_season (season_id, games_completed) {
         await db("seasons")
             .where("id", season_id)
             .update({
@@ -85,7 +85,7 @@ export class SeasonRepository {
      * @param {number} season_id
      * @returns {Promise<void>}
      */
-    async fail_season(season_id) {
+    async fail_season (season_id) {
         await db("seasons")
             .where("id", season_id)
             .update({
@@ -108,7 +108,7 @@ export class SeasonRepository {
      * @param {string} args.error_source - Where the crash occurred: 'emulator', 'database', 'node', 'unknown'
      * @returns {Promise<number>} The crash record ID
      */
-    async log_crash(args) {
+    async log_crash (args) {
         const required_keys = ["season_id"];
         for (const key of required_keys) {
             if (!args[key]) {
@@ -141,7 +141,7 @@ export class SeasonRepository {
      * @param {object} game_data - Game data from emulator JSONL output
      * @returns {Promise<number>} The game ID
      */
-    async save_game(season_id, game_data) {
+    async save_game (season_id, game_data) {
         const home_team_id = game_data.p1_team_id;
         const away_team_id = game_data.p2_team_id;
         const home_score = game_data.p1_score;
@@ -252,7 +252,7 @@ export class SeasonRepository {
      * @param {object} players_data - Player stats from emulator output (p1_players or p2_players)
      * @returns {Promise<void>}
      */
-    async save_player_stats(game_id, team_id, players_data) {
+    async save_player_stats (game_id, team_id, players_data) {
         const player_stats = [];
 
         for (const [position_key, stats] of Object.entries(players_data)) {
@@ -304,7 +304,7 @@ export class SeasonRepository {
      * @param {object} stats - Stats from emulator
      * @returns {object|null} Stat record for database
      */
-    build_stat_record(game_id, player_id, position_key, stats) {
+    build_stat_record (game_id, player_id, position_key, stats) {
         const base_record = {
             game_id: game_id,
             player_id: player_id,
@@ -398,7 +398,7 @@ export class SeasonRepository {
      * @param {number} season_id
      * @returns {Promise<void>}
      */
-    async update_team_season_stats(season_id) {
+    async update_team_season_stats (season_id) {
         // Get all games for this season
         const games = await db("games")
             .where("season_id", season_id)
@@ -501,7 +501,7 @@ export class SeasonRepository {
      * @param {number} season_id
      * @returns {Promise<object>} Season summary with standings
      */
-    async get_season_summary(season_id) {
+    async get_season_summary (season_id) {
         const season = await db("seasons")
             .where("id", season_id)
             .first();

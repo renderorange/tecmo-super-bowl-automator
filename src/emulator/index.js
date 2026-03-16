@@ -15,7 +15,7 @@ const DEFAULT_NESL = process.env.NESL_PATH || "/tmp/nesl/build/nesl";
 const DEFAULT_LUA_SCRIPT = path.join(__dirname, "lua", "controller.lua");
 
 export class Emulator {
-    constructor(options = {}) {
+    constructor (options = {}) {
         this.romPath = options.romPath || DEFAULT_ROM;
         this.neslPath = options.neslPath || DEFAULT_NESL;
         this.luaScript = options.luaScript || DEFAULT_LUA_SCRIPT;
@@ -39,7 +39,7 @@ export class Emulator {
      * @param {function} options.onProgress - Callback for progress messages (receives string)
      * @returns {Promise<object[]>} Array of game result objects
      */
-    async run(options = {}) {
+    async run (options = {}) {
         const maxGames = options.maxGames || this.maxGames;
         const outputFile = options.outputFile || this.outputFile;
         const onGame = options.onGame || null;
@@ -89,7 +89,8 @@ export class Emulator {
                     // run concurrently.
                     rl.pause();
                     try {
-                        const content = fs.readFileSync(outputFile, "utf8").trim();
+                        const content = fs.readFileSync(outputFile, "utf8")
+                            .trim();
                         const lines = content.split("\n");
                         const lastLine = lines[lines.length - 1];
                         if (lastLine) {
@@ -137,38 +138,41 @@ export class Emulator {
     /**
      * Parse the JSONL output file into an array of game objects.
      */
-    parseResults(filePath) {
+    parseResults (filePath) {
         const outputFile = filePath || this.outputFile;
         if (!fs.existsSync(outputFile)) {
             return [];
         }
 
-        const content = fs.readFileSync(outputFile, "utf8").trim();
+        const content = fs.readFileSync(outputFile, "utf8")
+            .trim();
         if (!content) {
             return [];
         }
 
-        return content.split("\n").map((line, i) => {
-            try {
-                return JSON.parse(line);
-            } catch (e) {
-                console.error(`Failed to parse game ${i + 1}: ${e.message}`);
-                return null;
-            }
-        }).filter(Boolean);
+        return content.split("\n")
+            .map((line, i) => {
+                try {
+                    return JSON.parse(line);
+                } catch (e) {
+                    console.error(`Failed to parse game ${i + 1}: ${e.message}`);
+                    return null;
+                }
+            })
+            .filter(Boolean);
     }
 
     /**
      * Check if the emulator process is currently running.
      */
-    isRunning() {
+    isRunning () {
         return this.running;
     }
 
     /**
      * Stop the emulator process.
      */
-    stop() {
+    stop () {
         if (this.process) {
             this.process.kill("SIGTERM");
             this.running = false;
@@ -179,7 +183,7 @@ export class Emulator {
     /**
      * Force-kill the emulator process.
      */
-    forceStop() {
+    forceStop () {
         if (this.process) {
             this.process.kill("SIGKILL");
             this.running = false;
