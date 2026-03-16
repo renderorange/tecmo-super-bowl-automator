@@ -4,30 +4,48 @@ Automated season simulator for Tecmo Super Bowl (NES). Uses the nesl headless em
 
 ## Status
 
-**Working end-to-end.** The Lua controller boots TSB, navigates to season mode, sets all 28 teams to COM via SRAM, and runs games autonomously. After each game it reads individual player stats from SRAM and writes a JSON object per game.
+**Full 17-week season working.** 225 games completed in ~31 minutes wall-clock. Standings, per-player stats, and scores all captured.
 
-- 14 games (one full week) in ~2 minutes wall-clock
-- Full 17-week season (~238 games) estimated ~34 minutes
-- Per-player stats: passing, rushing, receiving, kick/punt returns, sacks, INTs, kicking, punting
-- Team totals derived from player stats
-
-### Running a simulation
+### Running a season
 
 ```bash
-# From the project root:
-TSB_MAX_GAMES=14 /tmp/nesl/build/nesl src/emulator/lua/controller.lua \
-  ~/roms/nes/Tecmo\ Super\ Bowl\ \(USA\).nes
+# Run a full 17-week season
+npm run simulate
 
-# Output goes to /tmp/tsb-results.jsonl (one JSON object per line)
-# Override with TSB_OUTPUT env var
+# Or with options:
+node scripts/run-season.js --max-games 42 -o runs/test.jsonl --quiet
+
+# Or run the Lua controller directly:
+/tmp/nesl/build/nesl src/emulator/lua/controller.lua \
+  ~/roms/nes/Tecmo\ Super\ Bowl\ \(USA\).nes
 ```
+
+Output is JSONL (one JSON object per game) written to `runs/season-{timestamp}.jsonl`. The season runner also prints final standings to the console.
+
+### What's captured per game
+
+- Final score (authoritative total from RAM)
+- Per-player stats for all 25 roster positions on both teams:
+  - **QB**: pass att/comp/TD/INT/yds, rush att/yds/TD
+  - **RB/WR/TE**: rush att/yds/TD, rec/yds/TD, kick return att/yds/TD, punt return att/yds/TD
+  - **DEF** (11 positions): sacks, INTs, INT return yds/TD
+  - **K**: XP att/made, FG att/made
+  - **P**: punts, punt yds
+- Team totals (derived from player stats)
+- Week and game-in-week index
+
+### Performance
+
+- ~8 seconds wall-clock per game (~140x real-time)
+- 14 games (1 week) in ~2 minutes
+- 225 games (17-week season) in ~31 minutes
 
 ### Remaining work
 
-1. Node.js emulator wrapper (`src/emulator/index.js`) -- currently references FCEUX, needs update to spawn nesl
-2. Season runner -- handle week transitions and detect season end
-3. Database integration -- parse JSONL and insert into SQLite tables
-4. Score audit -- some scoring events (fumble recovery TDs, safeties) may not appear in individual player stat blocks
+1. Database integration -- parse JSONL and insert into SQLite tables
+2. Multi-season runs -- run N seasons for statistical analysis
+3. Score audit -- some scoring events (fumble recovery TDs, safeties) may not appear in individual player stat blocks
+4. Visualization -- charts comparing TSB engine output vs real 1991 NFL stats
 
 ## Emulator: nesl
 
@@ -82,11 +100,19 @@ joypad.write(1, 0)                  -- release all
 3. **Mode select** -- DOWN to SEASON GAME, press A
 4. **Set teams to COM** -- write `0x02` to all 28 bytes at SRAM `$669B` (requires MMC3 enable: `$A001 = $80`)
 5. **Season menu** -- DOWN twice to GAME START, press A
-6. **Game plays autonomously** -- no input needed during COM vs COM
-7. **Detect end** -- Q4 clock at 0:00 for 5000+ consecutive frames
+6. **Game plays autonomously** -- no input needed during COM vs COM (including coin toss, OT)
+7. **Detect end** -- wait for Q1 start (q==0, clock 1-5 min), then after Q4 (q>=3) count frames where clock minutes==0; 3000 stable frames = post-game
 8. **Read stats** -- individual player stats from SRAM `$6406` (P1) / `$650B` (P2), scores from RAM `$0399` / `$039E`
-9. **Advance** -- press A through post-game screens until MENU_Y (`$E1`) = `$02` (back at GAME START)
-10. **Repeat** from step 6
+9. **Advance** -- press A every 30 frames through post-game screens; stop when MENU_Y (`$E1`) = `$02` (back at GAME START)
+10. **Repeat** from step 6; weeks auto-advance after all 14 games
+
+### Game-over detection details
+
+The hardest part of the implementation. Key considerations:
+- Quarter/clock bytes retain stale values from the previous game during pre-game screens, so detection only starts after Q1 gameplay is confirmed (q==0 with clock 1-5 min)
+- Tie games go to OT (q=4+), which resets the clock; the counter resets when mins > 0 (OT clock running) and resumes counting when mins returns to 0
+- Post-game A presses also advance through OT coin toss and any additional OT periods
+- Season end detected when SRAM week counter (`$6758`) reaches 17
 
 ### Memory map
 
@@ -97,7 +123,7 @@ joypad.write(1, 0)                  -- release all
 | `$2D` | `GAME_STATUS` | Bit flags: `$02`=season, `$40`=game active |
 | `$6C` | `P1_TEAM` | Team ID (0x00-0x1B) |
 | `$6D` | `P2_TEAM` | Team ID |
-| `$76` | `QUARTER` | 0-based (0=Q1, 3=Q4) |
+| `$76` | `QUARTER` | 0-based (0=Q1, 3=Q4, 4+=OT) |
 | `$6A` | `CLOCK_SECONDS` | Game clock seconds |
 | `$6B` | `CLOCK_MINUTES` | Game clock minutes |
 | `$E1` | `MENU_Y` | Menu cursor index |
@@ -111,6 +137,7 @@ joypad.write(1, 0)                  -- release all
 | `$669B` | 28 | Team control types (0=MAN, 1=COA, 2=COM, 3=SKP) |
 | `$6406` | 242 | P1 individual player stats |
 | `$650B` | 242 | P2 individual player stats |
+| `$6758` | 1 | Current week in season (0-based, 0-16 = weeks 1-17) |
 
 ### Player stat byte layout (SRAM)
 
@@ -162,6 +189,9 @@ npm run db:seed
 
 # Run tests
 npm test
+
+# Run a full season
+npm run simulate
 ```
 
 ## Project Structure
@@ -173,19 +203,20 @@ src/
 │   ├── migrations/       # Schema migrations
 │   └── seeds/            # ROM-extracted seed data (28 teams, 840 players)
 └── emulator/
-    ├── index.js          # Node.js emulator wrapper (needs update for nesl)
+    ├── index.js          # Node.js emulator wrapper (spawns nesl, parses JSONL)
     └── lua/
         ├── memory.lua    # TSB memory/SRAM addresses and stat byte layouts
         └── controller.lua # Season simulation: navigation, game loop, stat extraction
 
 scripts/
 ├── extract-rom-data.js   # ROM data extraction (names + attributes)
+├── run-season.js         # Season runner (invokes emulator, prints standings)
 ├── seed.js               # Database seeding
-└── test-emulator.js      # Emulator integration test
+└── test-emulator.js      # Emulator integration test (runs 1 game)
 
 tests/
-├── db/           # Database schema and data tests
-└── emulator/     # Emulator wrapper tests
+├── db/           # Database schema and data tests (28 tests)
+└── emulator/     # Emulator wrapper tests (18 tests)
 ```
 
 ## Database

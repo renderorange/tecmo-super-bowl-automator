@@ -17,8 +17,9 @@ local SRAM = mem.SRAM
 -- Configuration
 ------------------------------------------------------------------------
 local OUTPUT_FILE = os.getenv("TSB_OUTPUT") or "/tmp/tsb-results.jsonl"
-local MAX_GAMES = tonumber(os.getenv("TSB_MAX_GAMES")) or 9999
+local MAX_GAMES = tonumber(os.getenv("TSB_MAX_GAMES")) or 238  -- 14 games/wk * 17 weeks
 local MAX_FRAMES_PER_GAME = 300000  -- ~83 min at 60fps safety limit
+local REGULAR_SEASON_WEEKS = 17     -- TSB 17-week regular season (weeks 0-16)
 
 ------------------------------------------------------------------------
 -- Input helpers
@@ -282,60 +283,70 @@ local function runOneGame()
     -- Press A on GAME START to begin the game
     press({A=true}, 2, 10)
 
-    -- Phase 1: Let the game play out autonomously (no input needed for COM vs COM)
-    -- Detect end of game: Q4 clock reaches 0:00 and stays there for a long time
-    local saw_q4 = false
-    local q4_zero_count = 0
+    -- Unified game loop: run frames until we're back at the season menu.
+    -- During gameplay, don't press anything (COM handles it).
+    -- During post-game screens (gs >= $C0), press A to advance.
+    -- Detect season menu by MENU_Y == $02 (GAME START cursor position).
+    --
+    -- The game lifecycle: pre-game screens -> gameplay (Q1-Q4, possibly OT) ->
+    -- post-game screens (stats, highlights) -> season menu.
+    -- We read stats after gameplay ends but before advancing past the menu.
+
+    local gameplay_started = false
+    local stats_read = false
+    local stats = nil
 
     for frame = 1, MAX_FRAMES_PER_GAME do
-        emu.frameadvance()
-
+        local gs = memory.readbyte(ADDR.GAME_STATUS)
         local q = memory.readbyte(ADDR.QUARTER)
         local mins = memory.readbyte(ADDR.CLOCK_MINUTES)
-        local secs = memory.readbyte(ADDR.CLOCK_SECONDS)
+        local my = memory.readbyte(ADDR.MENU_Y)
 
-        if q >= 3 then saw_q4 = true end
+        -- Detect gameplay started (Q1 with clock running)
+        if not gameplay_started and q == 0 and mins > 0 and mins <= 5 then
+            gameplay_started = true
+        end
 
-        if saw_q4 and q >= 3 and mins == 0 and secs == 0 then
-            q4_zero_count = q4_zero_count + 1
+        -- Read stats once after gameplay, when we first see a post-game screen
+        -- (gs >= $C0 after gameplay started, with clock at 0 in Q4+)
+        if gameplay_started and not stats_read and q >= 3 and mins == 0 and gs >= 0xC0 then
+            stats = readGameStats()
+            stats_read = true
+        end
+
+        -- Check for return to season menu
+        if gameplay_started and my == 0x02 and stats_read then
+            idle(10)
+            return stats
+        end
+
+        -- During post-game screens, press A to advance.
+        -- Post-game is indicated by gs >= $C0 after gameplay.
+        -- Also press A during pre-game screens (coin toss etc.) which show gs >= $40.
+        -- Do NOT press A during active gameplay (gs=$92 etc. with clock running).
+        if gameplay_started and stats_read and frame % 30 == 0 then
+            -- Safe to press A: we've read stats and are in post-game
+            joypad.write(1, {A=true})
+        elseif not gameplay_started and frame % 60 == 0 then
+            -- Pre-game: press A for coin toss etc.
+            -- (COM mode shouldn't need this, but just in case)
+            joypad.write(1, {A=true})
         else
-            q4_zero_count = 0
-        end
-
-        -- 5000 frames (~83 sec) at Q4 0:00 = definitely in post-game screens
-        if q4_zero_count >= 5000 then
-            break
-        end
-    end
-
-    if q4_zero_count < 5000 then
-        return nil  -- timed out
-    end
-
-    -- Phase 2: Read stats from SRAM (still valid during post-game)
-    local stats = readGameStats()
-
-    -- Phase 3: Press A to advance through post-game screens until
-    -- we're back at the season menu (MENU_Y=$02 = GAME START cursor)
-    for attempt = 1, 100 do
-        joypad.write(1, {A=true})
-        emu.frameadvance()
-        joypad.write(1, {A=true})
-        emu.frameadvance()
-
-        -- Check every frame for return to season menu
-        for f = 1, 120 do
             joypad.write(1, 0)
-            emu.frameadvance()
-            if memory.readbyte(ADDR.MENU_Y) == 0x02 then
-                idle(30)
-                return stats
-            end
+        end
+
+        emu.frameadvance()
+
+        -- Debug: periodic status during long waits
+        if frame % 60000 == 0 then
+            print(string.format("  [debug] f=%d gp=%s sr=%s q=%d mins=%d gs=$%02X my=$%02X",
+                frame, tostring(gameplay_started), tostring(stats_read), q, mins, gs, my))
         end
     end
 
-    -- Couldn't find menu, return stats anyway
-    return stats
+    -- Timed out
+    if stats then return stats end
+    return nil
 end
 
 ------------------------------------------------------------------------
@@ -357,7 +368,24 @@ local function main()
     print("Ready: all teams COM, cursor on GAME START")
 
     local game_count = 0
+    local last_week = -1
     while game_count < MAX_GAMES do
+        -- Check if regular season is over before starting next game
+        local current_week = memory.readbyte(SRAM.CURRENT_WEEK)
+        if current_week >= REGULAR_SEASON_WEEKS then
+            print(string.format("Regular season complete (week counter=%d)", current_week))
+            break
+        end
+
+        -- Log week transitions
+        if current_week ~= last_week then
+            if last_week >= 0 then
+                print(string.format("--- Week %d complete ---", last_week + 1))
+            end
+            print(string.format("Starting week %d", current_week + 1))
+            last_week = current_week
+        end
+
         game_count = game_count + 1
 
         local stats = runOneGame()
@@ -371,7 +399,7 @@ local function main()
 
         print(string.format("Game %d: %s %d - %s %d (wk %d, g %d)",
             game_count, stats.p1_team, stats.p1_score,
-            stats.p2_team, stats.p2_score, stats.week, stats.game_in_week))
+            stats.p2_team, stats.p2_score, stats.week + 1, stats.game_in_week + 1))
     end
 
     outFile:close()
