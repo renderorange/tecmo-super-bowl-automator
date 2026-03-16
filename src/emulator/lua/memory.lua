@@ -57,18 +57,18 @@ local SRAM = {
     CURRENT_GAME = 0x6759,       -- Current game within week
     WEEKLY_MATCHUPS = 0x675A,    -- 28 bytes: pairs of team IDs
 
-    -- In-game team stats (12 bytes)
-    -- NOTE: These may only be populated in SKP/SIM mode, not COM mode.
-    -- For COM games, derive team stats from individual player stats instead.
-    TEAM_STATS = 0x668E,
-    P1_FIRST_DOWNS = 0x668E,
-    P2_FIRST_DOWNS = 0x668F,
-    P1_RUSHES = 0x6690,
-    P2_RUSHES = 0x6691,
-    P1_RUSH_YARDS = 0x6692,     -- 2 bytes (little-endian)
-    P2_RUSH_YARDS = 0x6694,     -- 2 bytes
-    P1_PASS_YARDS = 0x6696,     -- 2 bytes
-    P2_PASS_YARDS = 0x6698,     -- 2 bytes
+    -- Season standings pointer table (CPU $DF17, in fixed bank)
+    -- 28 entries x 2 bytes, each pointing to a team's 208-byte ($D0) season info block
+    TEAM_SEASON_PTR_TABLE = 0xDF17,
+
+    -- Season info block offsets (within each team's $D0-byte block)
+    SEASON_WINS_OFFSET = 0xB2,
+    SEASON_LOSSES_OFFSET = 0xB3,
+    SEASON_TIES_OFFSET = 0xB4,
+    SEASON_PTS_FOR_OFFSET = 0xB5,       -- 2 bytes little-endian
+    SEASON_PTS_AGAINST_OFFSET = 0xB7,   -- 2 bytes little-endian
+    SEASON_PASS_YDS_ALLOWED_OFFSET = 0xB9,  -- 2 bytes
+    SEASON_RUSH_YDS_ALLOWED_OFFSET = 0xBB,  -- 2 bytes
 
     -- In-game player stats
     -- Each team block: QB(10)*2 + RB(16)*4 + WR(16)*4 + TE(16)*2 + DEF(5)*11
@@ -203,6 +203,32 @@ local function readBytes(addr, len)
 end
 
 ------------------------------------------------------------------------
+-- Season standings helpers
+------------------------------------------------------------------------
+
+-- Get the SRAM base address for a team's season info block (208 bytes)
+-- team_id: 0-27 (same as P1_TEAM / P2_TEAM values)
+local function getTeamSeasonBase(team_id)
+    local ptr_addr = SRAM.TEAM_SEASON_PTR_TABLE + team_id * 2
+    return read16(ptr_addr)
+end
+
+-- Read a team's current season record from SRAM
+-- Returns: {wins, losses, ties, pts_for, pts_against, pass_yds_allowed, rush_yds_allowed}
+local function readTeamRecord(team_id)
+    local base = getTeamSeasonBase(team_id)
+    return {
+        wins = memory.readbyte(base + SRAM.SEASON_WINS_OFFSET),
+        losses = memory.readbyte(base + SRAM.SEASON_LOSSES_OFFSET),
+        ties = memory.readbyte(base + SRAM.SEASON_TIES_OFFSET),
+        pts_for = read16(base + SRAM.SEASON_PTS_FOR_OFFSET),
+        pts_against = read16(base + SRAM.SEASON_PTS_AGAINST_OFFSET),
+        pass_yds_allowed = read16(base + SRAM.SEASON_PASS_YDS_ALLOWED_OFFSET),
+        rush_yds_allowed = read16(base + SRAM.SEASON_RUSH_YDS_ALLOWED_OFFSET),
+    }
+end
+
+------------------------------------------------------------------------
 -- Exports
 ------------------------------------------------------------------------
 return {
@@ -216,4 +242,6 @@ return {
     TEAM_NAMES = TEAM_NAMES,
     read16 = read16,
     readBytes = readBytes,
+    getTeamSeasonBase = getTeamSeasonBase,
+    readTeamRecord = readTeamRecord,
 }

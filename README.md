@@ -25,13 +25,15 @@ Output is JSONL (one JSON object per game) written to `runs/season-{timestamp}.j
 ### What's captured per game
 
 - Final score (authoritative total from RAM)
+- **Pre-game records** for both teams: W-L-T, points for/against (from SRAM season standings, for determining the underdog)
 - Per-player stats for all 25 roster positions on both teams:
   - **QB**: pass att/comp/TD/INT/yds, rush att/yds/TD
   - **RB/WR/TE**: rush att/yds/TD, rec/yds/TD, kick return att/yds/TD, punt return att/yds/TD
   - **DEF** (11 positions): sacks, INTs, INT return yds/TD
   - **K**: XP att/made, FG att/made
   - **P**: punts, punt yds
-- Team totals (derived from player stats)
+- Team totals (derived from player stats): rush/pass/rec yards and TDs, sacks, INTs, KR/PR TDs
+- **Untracked points**: the gap between the actual score and the sum of tracked scoring events (fumble recovery TDs, safeties, blocked kick return TDs -- events TSB doesn't attribute to individual players)
 - Week and game-in-week index
 
 ### Performance
@@ -40,12 +42,16 @@ Output is JSONL (one JSON object per game) written to `runs/season-{timestamp}.j
 - 14 games (1 week) in ~2 minutes
 - 225 games (17-week season) in ~31 minutes
 
+### Known limitations
+
+- **Untracked scoring**: TSB does not attribute fumble recovery TDs, safeties, or blocked kick return TDs to individual players. These events still affect the final score, and the point gap is captured as `untracked_pts` in the JSON output. Typically 0-14 points per team per game.
+- **Season PF/PA timing**: SRAM season standings (points for/against) are written after post-game screens are dismissed, so they reflect the state as of the previous game. W-L-T records are always current.
+
 ### Remaining work
 
 1. Database integration -- parse JSONL and insert into SQLite tables
 2. Multi-season runs -- run N seasons for statistical analysis
-3. Score audit -- some scoring events (fumble recovery TDs, safeties) may not appear in individual player stat blocks
-4. Visualization -- charts comparing TSB engine output vs real 1991 NFL stats
+3. Visualization -- charts comparing TSB engine output vs real 1991 NFL stats
 
 ## Emulator: nesl
 
@@ -135,9 +141,23 @@ The hardest part of the implementation. Key considerations:
 | Address | Size | Description |
 |---------|------|-------------|
 | `$669B` | 28 | Team control types (0=MAN, 1=COA, 2=COM, 3=SKP) |
-| `$6406` | 242 | P1 individual player stats |
-| `$650B` | 242 | P2 individual player stats |
+| `$6406` | 242 | P1 individual player stats (current game) |
+| `$650B` | 242 | P2 individual player stats (current game) |
 | `$6758` | 1 | Current week in season (0-based, 0-16 = weeks 1-17) |
+| `$DF17` | 56 | Pointer table (CPU addr) mapping team ID to season info SRAM base |
+| per-team | 208 | Season info block (28 blocks, `$67AE`-`$7F71`): player season stats, W-L-T, PF, PA, yards allowed |
+
+**Season info block offsets** (within each team's 208-byte block):
+
+| Offset | Size | Field |
+|--------|------|-------|
+| `$B2` | 1 | Wins |
+| `$B3` | 1 | Losses |
+| `$B4` | 1 | Ties |
+| `$B5` | 2 | Points for (16-bit LE) |
+| `$B7` | 2 | Points against (16-bit LE) |
+| `$B9` | 2 | Pass yards allowed (16-bit LE) |
+| `$BB` | 2 | Rush yards allowed (16-bit LE) |
 
 ### Player stat byte layout (SRAM)
 

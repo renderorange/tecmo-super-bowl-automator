@@ -238,6 +238,30 @@ local function readGameStats()
         }
     end
 
+    -- Compute untracked points (fumble recovery TDs, safeties, blocked kick TDs)
+    -- TSB doesn't store these as individual player stats, but we can infer
+    -- them from the gap between the actual score and the sum of tracked scoring.
+    for _, side in ipairs({"p1", "p2"}) do
+        local ts = result[side .. "_team_stats"]
+        local score = result[side .. "_score"]
+        -- Total TDs from player stats
+        local tracked_td = ts.rush_td + ts.rec_td + ts.int_td
+        -- Add KR/PR TDs from skill players
+        local p = result[side .. "_players"]
+        local kr_td, pr_td = 0, 0
+        for _, key in ipairs({"rb1","rb2","rb3","rb4","wr1","wr2","wr3","wr4","te1","te2"}) do
+            kr_td = kr_td + p[key].kr_td
+            pr_td = pr_td + p[key].pr_td
+        end
+        local total_tracked_td = tracked_td + kr_td + pr_td
+        local tracked_pts = total_tracked_td * 6 + ts.k.xp_made + ts.k.fg_made * 3
+        ts.kr_td = kr_td
+        ts.pr_td = pr_td
+        ts.total_td = total_tracked_td
+        ts.tracked_pts = tracked_pts
+        ts.untracked_pts = score - tracked_pts
+    end
+
     -- Season context
     result.week = memory.readbyte(SRAM.CURRENT_WEEK)
     result.game_in_week = memory.readbyte(SRAM.CURRENT_GAME)
@@ -280,6 +304,12 @@ end
 -- Returns: stats table, or nil on timeout
 ------------------------------------------------------------------------
 local function runOneGame()
+    -- Read pre-game standings for both teams BEFORE starting the game.
+    -- We peek at the upcoming matchup from SRAM: the game loads team IDs
+    -- into P1_TEAM/P2_TEAM when GAME START is selected, but they may not
+    -- be set yet. Instead, read from the weekly matchup schedule.
+    -- After the game starts, we'll read P1_TEAM/P2_TEAM and look up records.
+
     -- Press A on GAME START to begin the game
     press({A=true}, 2, 10)
 
@@ -295,6 +325,8 @@ local function runOneGame()
     local gameplay_started = false
     local stats_read = false
     local stats = nil
+    local pregame_p1_record = nil
+    local pregame_p2_record = nil
 
     for frame = 1, MAX_FRAMES_PER_GAME do
         local gs = memory.readbyte(ADDR.GAME_STATUS)
@@ -305,12 +337,19 @@ local function runOneGame()
         -- Detect gameplay started (Q1 with clock running)
         if not gameplay_started and q == 0 and mins > 0 and mins <= 5 then
             gameplay_started = true
+            -- Capture pre-game records now that team IDs are set
+            local p1_id = memory.readbyte(ADDR.P1_TEAM)
+            local p2_id = memory.readbyte(ADDR.P2_TEAM)
+            pregame_p1_record = mem.readTeamRecord(p1_id)
+            pregame_p2_record = mem.readTeamRecord(p2_id)
         end
 
         -- Read stats once after gameplay, when we first see a post-game screen
         -- (gs >= $C0 after gameplay started, with clock at 0 in Q4+)
         if gameplay_started and not stats_read and q >= 3 and mins == 0 and gs >= 0xC0 then
             stats = readGameStats()
+            stats.p1_pregame_record = pregame_p1_record
+            stats.p2_pregame_record = pregame_p2_record
             stats_read = true
         end
 
@@ -337,10 +376,10 @@ local function runOneGame()
 
         emu.frameadvance()
 
-        -- Debug: periodic status during long waits
-        if frame % 60000 == 0 then
-            print(string.format("  [debug] f=%d gp=%s sr=%s q=%d mins=%d gs=$%02X my=$%02X",
-                frame, tostring(gameplay_started), tostring(stats_read), q, mins, gs, my))
+        -- Safety log for very long games (5+ min wall-clock)
+        if frame % 120000 == 0 then
+            print(string.format("  [long game] f=%d q=%d mins=%d gs=$%02X",
+                frame, q, mins, gs))
         end
     end
 
