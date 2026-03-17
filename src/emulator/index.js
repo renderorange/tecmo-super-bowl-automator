@@ -73,6 +73,7 @@ export class Emulator {
         this.running = true;
         const games = [];
         const pendingCallbacks = [];
+        let next_line_index = 0;
 
         return new Promise((resolve, reject) => {
             // Parse stdout line-by-line for progress reporting
@@ -83,16 +84,21 @@ export class Emulator {
                 }
                 // When a game completes, the Lua script prints "Game N: ..."
                 // and writes a JSON line to the output file.
+                // Read the specific line for this game (by index), not the
+                // last line, to avoid reading stale data when the Lua script
+                // writes faster than callbacks process.
                 if (line.startsWith("Game ") && onGame) {
+                    const target_line = next_line_index;
+                    next_line_index++;
                     rl.pause();
                     const callbackPromise = (async () => {
                         try {
                             const content = fs.readFileSync(outputFile, "utf8")
                                 .trim();
                             const lines = content.split("\n");
-                            const lastLine = lines[lines.length - 1];
-                            if (lastLine) {
-                                const parsed = JSON.parse(lastLine);
+                            const game_line = lines[target_line];
+                            if (game_line) {
+                                const parsed = JSON.parse(game_line);
                                 games.push(parsed);
                                 await onGame(parsed, games.length);
                             }

@@ -21,6 +21,11 @@ local MAX_GAMES = tonumber(os.getenv("TSB_MAX_GAMES")) or 238  -- 14 games/wk * 
 local MAX_FRAMES_PER_GAME = 300000  -- ~83 min at 60fps safety limit
 local REGULAR_SEASON_WEEKS = 17     -- TSB 17-week regular season (weeks 0-16)
 
+-- Seed RNG from time + PID-like entropy so parallel runs diverge.
+-- The random idle before intro skip shifts the game engine's internal
+-- frame counter, producing different RNG sequences each run.
+math.randomseed(os.time() + (tonumber(os.getenv("TSB_SEED")) or 0))
+
 ------------------------------------------------------------------------
 -- Input helpers
 ------------------------------------------------------------------------
@@ -78,7 +83,7 @@ local function readQBStats(base)
         interceptions_thrown = memory.readbyte(base + mem.QB_STAT.PASS_INT),
         passing_yards = mem.read16(base + mem.QB_STAT.PASS_YDS_LO),
         rushing_attempts = memory.readbyte(base + mem.QB_STAT.RUSH_ATT),
-        rushing_yards = mem.read16(base + mem.QB_STAT.RUSH_YDS_LO),
+        rushing_yards = mem.read16_signed(base + mem.QB_STAT.RUSH_YDS_LO),
         rushing_tds = memory.readbyte(base + mem.QB_STAT.RUSH_TD),
     }
 end
@@ -89,7 +94,7 @@ local function readSkillStats(base)
         receiving_yards = mem.read16(base + mem.SKILL_STAT.REC_YDS_LO),
         receiving_tds = memory.readbyte(base + mem.SKILL_STAT.REC_TD),
         rushing_attempts = memory.readbyte(base + mem.SKILL_STAT.RUSH_ATT),
-        rushing_yards = mem.read16(base + mem.SKILL_STAT.RUSH_YDS_LO),
+        rushing_yards = mem.read16_signed(base + mem.SKILL_STAT.RUSH_YDS_LO),
         rushing_tds = memory.readbyte(base + mem.SKILL_STAT.RUSH_TD),
         kick_return_attempts = memory.readbyte(base + mem.SKILL_STAT.KR_ATT),
         kick_return_yards = mem.read16(base + mem.SKILL_STAT.KR_YDS_LO),
@@ -104,7 +109,7 @@ local function readDefStats(base)
     return {
         sacks = memory.readbyte(base + mem.DEF_STAT.SACKS),
         interceptions = memory.readbyte(base + mem.DEF_STAT.INTS),
-        interception_return_yards = mem.read16(base + mem.DEF_STAT.INT_YDS_LO),
+        interception_return_yards = mem.read16_signed(base + mem.DEF_STAT.INT_YDS_LO),
         interception_return_tds = memory.readbyte(base + mem.DEF_STAT.INT_TD),
     }
 end
@@ -273,6 +278,12 @@ end
 -- Navigation: boot -> season mode -> GAME START cursor
 ------------------------------------------------------------------------
 local function navigateToSeasonGameStart()
+    -- Random idle before intro skip (60-600 frames = 1-10 sec).
+    -- This shifts the game engine's frame counter so each run
+    -- produces a different RNG sequence.
+    local rng_delay = math.random(60, 600)
+    idle(rng_delay)
+
     -- Skip intro with B
     idle(120)
     press({B=true}, 2, 60)

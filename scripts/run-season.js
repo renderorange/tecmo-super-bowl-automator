@@ -37,7 +37,7 @@ const timestamp = new Date()
 const runsDir = path.join(projectRoot, "runs");
 fs.mkdirSync(runsDir, { recursive: true });
 
-const outputFile = args.output || path.join(runsDir, `season-${timestamp}.jsonl`);
+const outputFile = args.output || path.join(runsDir, `season-${timestamp}-${process.pid}.jsonl`);
 const maxGames = parseInt(args["max-games"], 10);
 const quiet = args.quiet || false;
 const saveToDb = args["save-db"] || false;
@@ -106,6 +106,12 @@ try {
         maxGames,
         outputFile,
         onProgress: (line) => {
+            if (line.startsWith("Starting week")) {
+                const match = line.match(/Starting week (\d+)/);
+                if (match) {
+                    currentWeek = parseInt(match[1], 10);
+                }
+            }
             if (!quiet) {
                 if (line.startsWith("Starting week")) {
                     console.log(`\n${line}`);
@@ -119,6 +125,7 @@ try {
             }
         },
         onGame: async (game, gameNumber) => {
+            gameCount = gameNumber;
             if (repository && seasonId) {
                 try {
                     await repository.save_game(seasonId, game);

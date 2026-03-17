@@ -11,6 +11,7 @@
         "lint": "node node_modules/eslint/bin/eslint.js .",
         "lint:fix": "node node_modules/eslint/bin/eslint.js . --fix",
         "simulate": "node scripts/run-season.js",
+        "simulate:multi": "node scripts/run-multi-season.js",
         "db:migrate": "knex migrate:latest",
         "db:rollback": "knex migrate:rollback",
         "db:seed": "node scripts/seed.js",

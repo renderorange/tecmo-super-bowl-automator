@@ -194,6 +194,14 @@ local function read16(addr)
     return memory.readbyte(addr) + memory.readbyte(addr + 1) * 256
 end
 
+local function read16_signed(addr)
+    local val = read16(addr)
+    if val >= 32768 then
+        val = val - 65536
+    end
+    return val
+end
+
 local function readBytes(addr, len)
     local bytes = {}
     for i = 0, len - 1 do
@@ -241,6 +249,7 @@ return {
     P_STAT = P_STAT,
     TEAM_NAMES = TEAM_NAMES,
     read16 = read16,
+    read16_signed = read16_signed,
     readBytes = readBytes,
     getTeamSeasonBase = getTeamSeasonBase,
     readTeamRecord = readTeamRecord,
