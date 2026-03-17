@@ -31,7 +31,7 @@ Output is JSONL (one JSON object per game) written to `runs/season-{timestamp}.j
 - **Pre-game records** for both teams: W-L-T, points_for, points_against (from SRAM season standings)
 - Per-player stats for all 25 roster positions on both teams:
   - **QB**: passing_attempts/completions/yards/TDs, interceptions_thrown, rushing_attempts/yards/TDs
-  - **RB/WR/TE**: rushing_attempts/yards/TDs, receptions/rec_yds/rec_tds, kick_return_attempts/yards/TDs, punt_return_attempts/yards/TDs
+  - **RB/WR/TE**: rushing_attempts/yards/TDs, receptions/receiving_yards/receiving_tds, kick_return_attempts/yards/TDs, punt_return_attempts/yards/TDs
   - **DEF** (11 positions): sacks, interceptions, interception_return_yards/TDs
   - **K**: xp_attempts/made, fg_attempts/made
   - **P**: punts, punt_yards

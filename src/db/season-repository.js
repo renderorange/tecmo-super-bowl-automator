@@ -45,14 +45,20 @@ export const POSITION_KEY_MAP = {
  * Repository class for persisting season simulation results.
  */
 export class SeasonRepository {
+    constructor(options = {}) {
+        this.db = options.db || db;
+        this.player_id_cache = new Map();
+        this.player_cache_loaded_teams = new Set();
+    }
+
     /**
      * Create a new season record.
      *
      * @param {number} totalGames - Expected total games (default: 238)
      * @returns {Promise<number>} The season ID
      */
-    async create_season (total_games = 238) {
-        const [season_id] = await db("seasons")
+    async create_season(total_games = 238) {
+        const [season_id] = await this.db("seasons")
             .insert({
                 total_games: total_games,
                 status: "running",
@@ -69,14 +75,12 @@ export class SeasonRepository {
      * @param {number} games_completed
      * @returns {Promise<void>}
      */
-    async complete_season (season_id, games_completed) {
-        await db("seasons")
-            .where("id", season_id)
-            .update({
-                completed_at: db.fn.now(),
-                games_completed: games_completed,
-                status: "completed",
-            });
+    async complete_season(season_id, games_completed) {
+        await this.db("seasons").where("id", season_id).update({
+            completed_at: this.db.fn.now(),
+            games_completed: games_completed,
+            status: "completed",
+        });
     }
 
     /**
@@ -85,12 +89,10 @@ export class SeasonRepository {
      * @param {number} season_id
      * @returns {Promise<void>}
      */
-    async fail_season (season_id) {
-        await db("seasons")
-            .where("id", season_id)
-            .update({
-                status: "failed",
-            });
+    async fail_season(season_id) {
+        await this.db("seasons").where("id", season_id).update({
+            status: "failed",
+        });
     }
 
     /**
@@ -108,7 +110,7 @@ export class SeasonRepository {
      * @param {string} args.error_source - Where the crash occurred: 'emulator', 'database', 'node', 'unknown'
      * @returns {Promise<number>} The crash record ID
      */
-    async log_crash (args) {
+    async log_crash(args) {
         const required_keys = ["season_id"];
         for (const key of required_keys) {
             if (!args[key]) {
@@ -116,7 +118,7 @@ export class SeasonRepository {
             }
         }
 
-        const [crash_id] = await db("season_crashes")
+        const [crash_id] = await this.db("season_crashes")
             .insert({
                 season_id: args.season_id,
                 games_completed: args.games_completed || 0,
@@ -141,7 +143,7 @@ export class SeasonRepository {
      * @param {object} game_data - Game data from emulator JSONL output
      * @returns {Promise<number>} The game ID
      */
-    async save_game (season_id, game_data) {
+    async save_game(season_id, game_data) {
         const home_team_id = game_data.p1_team_id;
         const away_team_id = game_data.p2_team_id;
         const home_score = game_data.p1_score;
@@ -152,96 +154,115 @@ export class SeasonRepository {
         const home_pre = game_data.p1_pregame_record || {};
         const away_pre = game_data.p2_pregame_record || {};
 
-        // Insert the game record
-        const [game_id] = await db("games")
-            .insert({
-                season_id: season_id,
-                week: game_data.week + 1, // Convert 0-based to 1-based
-                home_team_id: home_team_id,
-                away_team_id: away_team_id,
-                home_score: home_score,
-                away_score: away_score,
-                is_overtime: false, // Could be inferred from team_stats if needed
+        return this.db.transaction(async (trx) => {
+            const [game_id] = await trx("games")
+                .insert({
+                    season_id: season_id,
+                    week: game_data.week + 1, // Convert 0-based to 1-based
+                    home_team_id: home_team_id,
+                    away_team_id: away_team_id,
+                    home_score: home_score,
+                    away_score: away_score,
+                    is_overtime: false, // Could be inferred from team_stats if needed
 
-                // Home team stats
-                home_rushing_attempts: home_stats.rushing_attempts || 0,
-                home_rushing_yards: home_stats.rushing_yards || 0,
-                home_rushing_tds: home_stats.rushing_tds || 0,
-                home_passing_attempts: home_stats.passing_attempts || 0,
-                home_passing_completions: home_stats.passing_completions || 0,
-                home_passing_yards: home_stats.passing_yards || 0,
-                home_passing_tds: home_stats.passing_tds || 0,
-                home_interceptions_thrown: home_stats.interceptions_thrown || 0,
-                home_receptions: home_stats.receptions || 0,
-                home_receiving_yards: home_stats.receiving_yards || 0,
-                home_receiving_tds: home_stats.receiving_tds || 0,
-                home_sacks: home_stats.sacks || 0,
-                home_interceptions: home_stats.interceptions || 0,
-                home_interception_return_yards: home_stats.interception_return_yards || 0,
-                home_interception_return_tds: home_stats.interception_return_tds || 0,
-                home_kick_return_yards: home_stats.kick_return_yards || 0,
-                home_kick_return_tds: home_stats.kick_return_tds || 0,
-                home_punt_return_yards: home_stats.punt_return_yards || 0,
-                home_punt_return_tds: home_stats.punt_return_tds || 0,
-                home_punts: home_stats.punting?.punts || 0,
-                home_punt_yards: home_stats.punting?.punt_yards || 0,
-                home_xp_attempts: home_stats.k?.xp_attempts || 0,
-                home_xp_made: home_stats.k?.xp_made || 0,
-                home_fg_attempts: home_stats.k?.fg_attempts || 0,
-                home_fg_made: home_stats.k?.fg_made || 0,
-                home_tracked_pts: home_stats.tracked_pts || 0,
-                home_untracked_pts: home_stats.untracked_pts || 0,
+                    // Home team stats
+                    home_rushing_attempts: home_stats.rushing_attempts || 0,
+                    home_rushing_yards: home_stats.rushing_yards || 0,
+                    home_rushing_tds: home_stats.rushing_tds || 0,
+                    home_passing_attempts: home_stats.passing_attempts || 0,
+                    home_passing_completions: home_stats.passing_completions || 0,
+                    home_passing_yards: home_stats.passing_yards || 0,
+                    home_passing_tds: home_stats.passing_tds || 0,
+                    home_interceptions_thrown: home_stats.interceptions_thrown || 0,
+                    home_receptions: home_stats.receptions || 0,
+                    home_receiving_yards: home_stats.receiving_yards || 0,
+                    home_receiving_tds: home_stats.receiving_tds || 0,
+                    home_sacks: home_stats.sacks || 0,
+                    home_interceptions: home_stats.interceptions || 0,
+                    home_interception_return_yards: home_stats.interception_return_yards || 0,
+                    home_interception_return_tds: home_stats.interception_return_tds || 0,
+                    home_kick_return_yards: home_stats.kick_return_yards || 0,
+                    home_kick_return_tds: home_stats.kick_return_tds || 0,
+                    home_punt_return_yards: home_stats.punt_return_yards || 0,
+                    home_punt_return_tds: home_stats.punt_return_tds || 0,
+                    home_punts: home_stats.punting?.punts || 0,
+                    home_punt_yards: home_stats.punting?.punt_yards || 0,
+                    home_xp_attempts: home_stats.k?.xp_attempts || 0,
+                    home_xp_made: home_stats.k?.xp_made || 0,
+                    home_fg_attempts: home_stats.k?.fg_attempts || 0,
+                    home_fg_made: home_stats.k?.fg_made || 0,
+                    home_tracked_pts: home_stats.tracked_pts || 0,
+                    home_untracked_pts: home_stats.untracked_pts || 0,
 
-                // Away team stats
-                away_rushing_attempts: away_stats.rushing_attempts || 0,
-                away_rushing_yards: away_stats.rushing_yards || 0,
-                away_rushing_tds: away_stats.rushing_tds || 0,
-                away_passing_attempts: away_stats.passing_attempts || 0,
-                away_passing_completions: away_stats.passing_completions || 0,
-                away_passing_yards: away_stats.passing_yards || 0,
-                away_passing_tds: away_stats.passing_tds || 0,
-                away_interceptions_thrown: away_stats.interceptions_thrown || 0,
-                away_receptions: away_stats.receptions || 0,
-                away_receiving_yards: away_stats.receiving_yards || 0,
-                away_receiving_tds: away_stats.receiving_tds || 0,
-                away_sacks: away_stats.sacks || 0,
-                away_interceptions: away_stats.interceptions || 0,
-                away_interception_return_yards: away_stats.interception_return_yards || 0,
-                away_interception_return_tds: away_stats.interception_return_tds || 0,
-                away_kick_return_yards: away_stats.kick_return_yards || 0,
-                away_kick_return_tds: away_stats.kick_return_tds || 0,
-                away_punt_return_yards: away_stats.punt_return_yards || 0,
-                away_punt_return_tds: away_stats.punt_return_tds || 0,
-                away_punts: away_stats.punting?.punts || 0,
-                away_punt_yards: away_stats.punting?.punt_yards || 0,
-                away_xp_attempts: away_stats.k?.xp_attempts || 0,
-                away_xp_made: away_stats.k?.xp_made || 0,
-                away_fg_attempts: away_stats.k?.fg_attempts || 0,
-                away_fg_made: away_stats.k?.fg_made || 0,
-                away_tracked_pts: away_stats.tracked_pts || 0,
-                away_untracked_pts: away_stats.untracked_pts || 0,
+                    // Away team stats
+                    away_rushing_attempts: away_stats.rushing_attempts || 0,
+                    away_rushing_yards: away_stats.rushing_yards || 0,
+                    away_rushing_tds: away_stats.rushing_tds || 0,
+                    away_passing_attempts: away_stats.passing_attempts || 0,
+                    away_passing_completions: away_stats.passing_completions || 0,
+                    away_passing_yards: away_stats.passing_yards || 0,
+                    away_passing_tds: away_stats.passing_tds || 0,
+                    away_interceptions_thrown: away_stats.interceptions_thrown || 0,
+                    away_receptions: away_stats.receptions || 0,
+                    away_receiving_yards: away_stats.receiving_yards || 0,
+                    away_receiving_tds: away_stats.receiving_tds || 0,
+                    away_sacks: away_stats.sacks || 0,
+                    away_interceptions: away_stats.interceptions || 0,
+                    away_interception_return_yards: away_stats.interception_return_yards || 0,
+                    away_interception_return_tds: away_stats.interception_return_tds || 0,
+                    away_kick_return_yards: away_stats.kick_return_yards || 0,
+                    away_kick_return_tds: away_stats.kick_return_tds || 0,
+                    away_punt_return_yards: away_stats.punt_return_yards || 0,
+                    away_punt_return_tds: away_stats.punt_return_tds || 0,
+                    away_punts: away_stats.punting?.punts || 0,
+                    away_punt_yards: away_stats.punting?.punt_yards || 0,
+                    away_xp_attempts: away_stats.k?.xp_attempts || 0,
+                    away_xp_made: away_stats.k?.xp_made || 0,
+                    away_fg_attempts: away_stats.k?.fg_attempts || 0,
+                    away_fg_made: away_stats.k?.fg_made || 0,
+                    away_tracked_pts: away_stats.tracked_pts || 0,
+                    away_untracked_pts: away_stats.untracked_pts || 0,
 
-                // Pre-game records
-                home_pre_wins: home_pre.wins || 0,
-                home_pre_losses: home_pre.losses || 0,
-                home_pre_ties: home_pre.ties || 0,
-                home_pre_points_for: home_pre.points_for || 0,
-                home_pre_points_against: home_pre.points_against || 0,
-                away_pre_wins: away_pre.wins || 0,
-                away_pre_losses: away_pre.losses || 0,
-                away_pre_ties: away_pre.ties || 0,
-                away_pre_points_for: away_pre.points_for || 0,
-                away_pre_points_against: away_pre.points_against || 0,
-            })
-            .returning("id");
+                    // Pre-game records
+                    home_pre_wins: home_pre.wins || 0,
+                    home_pre_losses: home_pre.losses || 0,
+                    home_pre_ties: home_pre.ties || 0,
+                    home_pre_points_for: home_pre.points_for || 0,
+                    home_pre_points_against: home_pre.points_against || 0,
+                    away_pre_wins: away_pre.wins || 0,
+                    away_pre_losses: away_pre.losses || 0,
+                    away_pre_ties: away_pre.ties || 0,
+                    away_pre_points_for: away_pre.points_for || 0,
+                    away_pre_points_against: away_pre.points_against || 0,
+                })
+                .returning("id");
 
-        const game_id_val = typeof game_id === "object" ? game_id.id : game_id;
+            const game_id_val = typeof game_id === "object" ? game_id.id : game_id;
 
-        // Save player stats for both teams
-        await this.save_player_stats(game_id_val, home_team_id, game_data.p1_players);
-        await this.save_player_stats(game_id_val, away_team_id, game_data.p2_players);
+            // Save player stats for both teams
+            await this.save_player_stats(game_id_val, home_team_id, game_data.p1_players, trx);
+            await this.save_player_stats(game_id_val, away_team_id, game_data.p2_players, trx);
 
-        return game_id_val;
+            return game_id_val;
+        });
+    }
+
+    async ensure_team_player_cache(team_id, trx) {
+        if (this.player_cache_loaded_teams.has(team_id)) {
+            return;
+        }
+
+        const players = await trx("players").where("team_id", team_id).select("id", "position_detail");
+
+        for (const player of players) {
+            this.player_id_cache.set(`${team_id}:${player.position_detail}`, player.id);
+        }
+
+        this.player_cache_loaded_teams.add(team_id);
+    }
+
+    get_cached_player_id(team_id, position_detail) {
+        return this.player_id_cache.get(`${team_id}:${position_detail}`) || null;
     }
 
     /**
@@ -252,8 +273,14 @@ export class SeasonRepository {
      * @param {object} players_data - Player stats from emulator output (p1_players or p2_players)
      * @returns {Promise<void>}
      */
-    async save_player_stats (game_id, team_id, players_data) {
+    async save_player_stats(game_id, team_id, players_data, trx = this.db) {
         const player_stats = [];
+
+        if (!players_data) {
+            return;
+        }
+
+        await this.ensure_team_player_cache(team_id, trx);
 
         for (const [position_key, stats] of Object.entries(players_data)) {
             const position_detail = POSITION_KEY_MAP[position_key];
@@ -262,28 +289,15 @@ export class SeasonRepository {
                 continue;
             }
 
-            // Look up the player ID
-            const player = await db("players")
-                .where({
-                    team_id: team_id,
-                    position_detail: position_detail,
-                })
-                .first();
+            const player_id = this.get_cached_player_id(team_id, position_detail);
 
-            if (!player) {
-                console.warn(
-                    `Player not found for team ${team_id}, position ${position_detail}`,
-                );
+            if (!player_id) {
+                console.warn(`Player not found for team ${team_id}, position ${position_detail}`);
                 continue;
             }
 
             // Build player stat record based on position type
-            const stat_record = this.build_stat_record(
-                game_id,
-                player.id,
-                position_key,
-                stats,
-            );
+            const stat_record = this.build_stat_record(game_id, player_id, position_key, stats);
 
             if (stat_record) {
                 player_stats.push(stat_record);
@@ -291,7 +305,7 @@ export class SeasonRepository {
         }
 
         if (player_stats.length > 0) {
-            await db.batchInsert("player_game_stats", player_stats, 50);
+            await trx("player_game_stats").insert(player_stats);
         }
     }
 
@@ -304,7 +318,7 @@ export class SeasonRepository {
      * @param {object} stats - Stats from emulator
      * @returns {object|null} Stat record for database
      */
-    build_stat_record (game_id, player_id, position_key, stats) {
+    build_stat_record(game_id, player_id, position_key, stats) {
         const base_record = {
             game_id: game_id,
             player_id: player_id,
@@ -324,11 +338,7 @@ export class SeasonRepository {
             };
         }
 
-        if (
-            position_key.startsWith("rb") ||
-            position_key.startsWith("wr") ||
-            position_key.startsWith("te")
-        ) {
+        if (position_key.startsWith("rb") || position_key.startsWith("wr") || position_key.startsWith("te")) {
             return {
                 ...base_record,
                 receptions: stats.receptions || 0,
@@ -346,21 +356,7 @@ export class SeasonRepository {
             };
         }
 
-        if (
-            [
-                "re",
-                "nt",
-                "le",
-                "rolb",
-                "rilb",
-                "lilb",
-                "lolb",
-                "rcb",
-                "lcb",
-                "fs",
-                "ss",
-            ].includes(position_key)
-        ) {
+        if (["re", "nt", "le", "rolb", "rilb", "lilb", "lolb", "rcb", "lcb", "fs", "ss"].includes(position_key)) {
             return {
                 ...base_record,
                 sacks: stats.sacks || 0,
@@ -398,9 +394,9 @@ export class SeasonRepository {
      * @param {number} season_id
      * @returns {Promise<void>}
      */
-    async update_team_season_stats (season_id) {
+    async update_team_season_stats(season_id) {
         // Get all games for this season
-        const games = await db("games")
+        const games = await this.db("games")
             .where("season_id", season_id)
             .select("home_team_id", "away_team_id", "home_score", "away_score");
 
@@ -476,7 +472,7 @@ export class SeasonRepository {
 
         // Insert or update team_season_stats
         for (const stats of Object.values(team_stats)) {
-            await db("team_season_stats")
+            await this.db("team_season_stats")
                 .insert({
                     season_id: season_id,
                     team_id: stats.team_id,
@@ -501,24 +497,17 @@ export class SeasonRepository {
      * @param {number} season_id
      * @returns {Promise<object>} Season summary with standings
      */
-    async get_season_summary (season_id) {
-        const season = await db("seasons")
-            .where("id", season_id)
-            .first();
+    async get_season_summary(season_id) {
+        const season = await this.db("seasons").where("id", season_id).first();
 
         if (!season) {
             return null;
         }
 
-        const standings = await db("team_season_stats")
+        const standings = await this.db("team_season_stats")
             .where("season_id", season_id)
             .join("teams", "team_season_stats.team_id", "teams.id")
-            .select(
-                "teams.abbreviation",
-                "teams.city",
-                "teams.name",
-                "team_season_stats.*",
-            )
+            .select("teams.abbreviation", "teams.city", "teams.name", "team_season_stats.*")
             .orderBy([
                 { column: "wins", order: "desc" },
                 { column: "points_for", order: "desc" },

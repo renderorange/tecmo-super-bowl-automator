@@ -30,10 +30,7 @@ const args = minimist(process.argv.slice(2), {
 });
 
 // Set up output file
-const timestamp = new Date()
-    .toISOString()
-    .replace(/[:.]/g, "-")
-    .slice(0, 19);
+const timestamp = new Date().toISOString().replace(/[:.]/g, "-").slice(0, 19);
 const runsDir = path.join(projectRoot, "runs");
 fs.mkdirSync(runsDir, { recursive: true });
 
@@ -63,11 +60,10 @@ let seasonId = null;
 // Track stats for summary
 let gameCount = 0;
 let currentWeek = -1;
-const weekResults = {};
 const teamRecords = {};
 const startTime = Date.now();
 
-function updateRecords (game) {
+function updateRecords(game) {
     const p1 = game.p1_team;
     const p2 = game.p2_team;
 
@@ -163,27 +159,21 @@ try {
         console.log("Team   W   L   T    PF    PA   Diff");
         console.log("----  --  --  --  ----  ----  -----");
 
-        const sorted = Object.entries(teamRecords)
-            .sort((a, b) => {
-                // Sort by wins desc, then point diff desc
-                if (b[1].wins !== a[1].wins) {
-                    return b[1].wins - a[1].wins;
-                }
-                return (b[1].pf - b[1].pa) - (a[1].pf - a[1].pa);
-            });
+        const sorted = Object.entries(teamRecords).sort((a, b) => {
+            // Sort by wins desc, then point diff desc
+            if (b[1].wins !== a[1].wins) {
+                return b[1].wins - a[1].wins;
+            }
+            return b[1].pf - b[1].pa - (a[1].pf - a[1].pa);
+        });
 
         for (const [team, rec] of sorted) {
             const diff = rec.pf - rec.pa;
             const diffStr = (diff >= 0 ? "+" : "") + diff;
             console.log(
-                `${team.padEnd(5)} ${String(rec.wins)
-                    .padStart(2)}  ` +
-                `${String(rec.losses)
-                    .padStart(2)}  ${String(rec.ties)
-                    .padStart(2)}  ` +
-                `${String(rec.pf)
-                    .padStart(4)}  ${String(rec.pa)
-                    .padStart(4)}  ${diffStr.padStart(5)}`,
+                `${team.padEnd(5)} ${String(rec.wins).padStart(2)}  ` +
+                    `${String(rec.losses).padStart(2)}  ${String(rec.ties).padStart(2)}  ` +
+                    `${String(rec.pf).padStart(4)}  ${String(rec.pa).padStart(4)}  ${diffStr.padStart(5)}`,
             );
         }
     }

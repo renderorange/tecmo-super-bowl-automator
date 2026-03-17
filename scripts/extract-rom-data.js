@@ -25,7 +25,7 @@ const OUTPUT_PATH = path.join(__dirname, "..", "src", "db", "seeds", "teams_with
 // iNES header is 16 bytes; Bank 1 maps CPU $8000 to file offset 0x10
 const INES_HEADER_SIZE = 0x10;
 const BANK_CPU_BASE = 0x8000;
-const ABILITIES_CPU_ADDR = 0xB000;
+const ABILITIES_CPU_ADDR = 0xb000;
 const ABILITIES_FILE_OFFSET = ABILITIES_CPU_ADDR - BANK_CPU_BASE + INES_HEADER_SIZE;
 
 // 16 possible attribute notch values (nibble 0x0 through 0xF)
@@ -34,60 +34,102 @@ const ATTR_VALUES = [6, 13, 19, 25, 31, 38, 44, 50, 56, 63, 69, 75, 81, 88, 94, 
 // Team order in ROM (matches disassembly pointer table order)
 // NOTE: this differs from the extract-from-rom.js team ordering
 const TEAMS = [
-    { id: 0,  name: "Bills",       city: "Buffalo",        abbr: "BUF", conference: "AFC", division: "East" },
-    { id: 1,  name: "Colts",       city: "Indianapolis",   abbr: "IND", conference: "AFC", division: "East" },
-    { id: 2,  name: "Dolphins",    city: "Miami",          abbr: "MIA", conference: "AFC", division: "East" },
-    { id: 3,  name: "Patriots",    city: "New England",    abbr: "NEP", conference: "AFC", division: "East" },
-    { id: 4,  name: "Jets",        city: "New York",       abbr: "NYJ", conference: "AFC", division: "East" },
-    { id: 5,  name: "Bengals",     city: "Cincinnati",     abbr: "CIN", conference: "AFC", division: "Central" },
-    { id: 6,  name: "Browns",      city: "Cleveland",      abbr: "CLE", conference: "AFC", division: "Central" },
-    { id: 7,  name: "Oilers",      city: "Houston",        abbr: "HOU", conference: "AFC", division: "Central" },
-    { id: 8,  name: "Steelers",    city: "Pittsburgh",     abbr: "PIT", conference: "AFC", division: "Central" },
-    { id: 9,  name: "Broncos",     city: "Denver",         abbr: "DEN", conference: "AFC", division: "West" },
-    { id: 10, name: "Chiefs",      city: "Kansas City",    abbr: "KAN", conference: "AFC", division: "West" },
-    { id: 11, name: "Raiders",     city: "Los Angeles",    abbr: "RAI", conference: "AFC", division: "West" },
-    { id: 12, name: "Chargers",    city: "San Diego",      abbr: "LAC", conference: "AFC", division: "West" },
-    { id: 13, name: "Seahawks",    city: "Seattle",        abbr: "SEA", conference: "AFC", division: "West" },
-    { id: 14, name: "Redskins",    city: "Washington",     abbr: "WAS", conference: "NFC", division: "East" },
-    { id: 15, name: "Giants",      city: "New York",       abbr: "NYG", conference: "NFC", division: "East" },
-    { id: 16, name: "Eagles",      city: "Philadelphia",   abbr: "PHI", conference: "NFC", division: "East" },
-    { id: 17, name: "Cardinals",   city: "Phoenix",        abbr: "PHO", conference: "NFC", division: "East" },
-    { id: 18, name: "Cowboys",     city: "Dallas",         abbr: "DAL", conference: "NFC", division: "East" },
-    { id: 19, name: "Bears",       city: "Chicago",        abbr: "CHI", conference: "NFC", division: "Central" },
-    { id: 20, name: "Lions",       city: "Detroit",        abbr: "DET", conference: "NFC", division: "Central" },
-    { id: 21, name: "Packers",     city: "Green Bay",      abbr: "GB",  conference: "NFC", division: "Central" },
-    { id: 22, name: "Vikings",     city: "Minnesota",      abbr: "MIN", conference: "NFC", division: "Central" },
-    { id: 23, name: "Buccaneers",  city: "Tampa Bay",      abbr: "TB",  conference: "NFC", division: "Central" },
-    { id: 24, name: "49ers",       city: "San Francisco",  abbr: "SF",  conference: "NFC", division: "West" },
-    { id: 25, name: "Rams",        city: "Los Angeles",    abbr: "LAR", conference: "NFC", division: "West" },
-    { id: 26, name: "Saints",      city: "New Orleans",    abbr: "NO",  conference: "NFC", division: "West" },
-    { id: 27, name: "Falcons",     city: "Atlanta",        abbr: "ATL", conference: "NFC", division: "West" },
+    { id: 0, name: "Bills", city: "Buffalo", abbr: "BUF", conference: "AFC", division: "East" },
+    { id: 1, name: "Colts", city: "Indianapolis", abbr: "IND", conference: "AFC", division: "East" },
+    { id: 2, name: "Dolphins", city: "Miami", abbr: "MIA", conference: "AFC", division: "East" },
+    { id: 3, name: "Patriots", city: "New England", abbr: "NEP", conference: "AFC", division: "East" },
+    { id: 4, name: "Jets", city: "New York", abbr: "NYJ", conference: "AFC", division: "East" },
+    { id: 5, name: "Bengals", city: "Cincinnati", abbr: "CIN", conference: "AFC", division: "Central" },
+    { id: 6, name: "Browns", city: "Cleveland", abbr: "CLE", conference: "AFC", division: "Central" },
+    { id: 7, name: "Oilers", city: "Houston", abbr: "HOU", conference: "AFC", division: "Central" },
+    { id: 8, name: "Steelers", city: "Pittsburgh", abbr: "PIT", conference: "AFC", division: "Central" },
+    { id: 9, name: "Broncos", city: "Denver", abbr: "DEN", conference: "AFC", division: "West" },
+    { id: 10, name: "Chiefs", city: "Kansas City", abbr: "KAN", conference: "AFC", division: "West" },
+    { id: 11, name: "Raiders", city: "Los Angeles", abbr: "RAI", conference: "AFC", division: "West" },
+    { id: 12, name: "Chargers", city: "San Diego", abbr: "LAC", conference: "AFC", division: "West" },
+    { id: 13, name: "Seahawks", city: "Seattle", abbr: "SEA", conference: "AFC", division: "West" },
+    { id: 14, name: "Redskins", city: "Washington", abbr: "WAS", conference: "NFC", division: "East" },
+    { id: 15, name: "Giants", city: "New York", abbr: "NYG", conference: "NFC", division: "East" },
+    { id: 16, name: "Eagles", city: "Philadelphia", abbr: "PHI", conference: "NFC", division: "East" },
+    { id: 17, name: "Cardinals", city: "Phoenix", abbr: "PHO", conference: "NFC", division: "East" },
+    { id: 18, name: "Cowboys", city: "Dallas", abbr: "DAL", conference: "NFC", division: "East" },
+    { id: 19, name: "Bears", city: "Chicago", abbr: "CHI", conference: "NFC", division: "Central" },
+    { id: 20, name: "Lions", city: "Detroit", abbr: "DET", conference: "NFC", division: "Central" },
+    { id: 21, name: "Packers", city: "Green Bay", abbr: "GB", conference: "NFC", division: "Central" },
+    { id: 22, name: "Vikings", city: "Minnesota", abbr: "MIN", conference: "NFC", division: "Central" },
+    { id: 23, name: "Buccaneers", city: "Tampa Bay", abbr: "TB", conference: "NFC", division: "Central" },
+    { id: 24, name: "49ers", city: "San Francisco", abbr: "SF", conference: "NFC", division: "West" },
+    { id: 25, name: "Rams", city: "Los Angeles", abbr: "LAR", conference: "NFC", division: "West" },
+    { id: 26, name: "Saints", city: "New Orleans", abbr: "NO", conference: "NFC", division: "West" },
+    { id: 27, name: "Falcons", city: "Atlanta", abbr: "ATL", conference: "NFC", division: "West" },
 ];
 
 // 30 roster positions per team in ROM order
 const POSITIONS = [
-    "QB1", "QB2",
-    "RB1", "RB2", "RB3", "RB4",
-    "WR1", "WR2", "WR3", "WR4",
-    "TE1", "TE2",
-    "C", "LG", "RG", "LT", "RT",
-    "RE", "NT", "LE",
-    "ROLB", "RILB", "LILB", "LOLB",
-    "RCB", "LCB", "FS", "SS",
-    "K", "P",
+    "QB1",
+    "QB2",
+    "RB1",
+    "RB2",
+    "RB3",
+    "RB4",
+    "WR1",
+    "WR2",
+    "WR3",
+    "WR4",
+    "TE1",
+    "TE2",
+    "C",
+    "LG",
+    "RG",
+    "LT",
+    "RT",
+    "RE",
+    "NT",
+    "LE",
+    "ROLB",
+    "RILB",
+    "LILB",
+    "LOLB",
+    "RCB",
+    "LCB",
+    "FS",
+    "SS",
+    "K",
+    "P",
 ];
 
 // Position group for simplified categorization
 const POSITION_GROUP = {
-    "QB1": "QB", "QB2": "QB",
-    "RB1": "RB", "RB2": "RB", "RB3": "RB", "RB4": "RB",
-    "WR1": "WR", "WR2": "WR", "WR3": "WR", "WR4": "WR",
-    "TE1": "TE", "TE2": "TE",
-    "C": "OL", "LG": "OL", "RG": "OL", "LT": "OL", "RT": "OL",
-    "RE": "DL", "NT": "DL", "LE": "DL",
-    "ROLB": "LB", "RILB": "LB", "LILB": "LB", "LOLB": "LB",
-    "RCB": "DB", "LCB": "DB", "FS": "DB", "SS": "DB",
-    "K": "K", "P": "P",
+    QB1: "QB",
+    QB2: "QB",
+    RB1: "RB",
+    RB2: "RB",
+    RB3: "RB",
+    RB4: "RB",
+    WR1: "WR",
+    WR2: "WR",
+    WR3: "WR",
+    WR4: "WR",
+    TE1: "TE",
+    TE2: "TE",
+    C: "OL",
+    LG: "OL",
+    RG: "OL",
+    LT: "OL",
+    RT: "OL",
+    RE: "DL",
+    NT: "DL",
+    LE: "DL",
+    ROLB: "LB",
+    RILB: "LB",
+    LILB: "LB",
+    LOLB: "LB",
+    RCB: "DB",
+    LCB: "DB",
+    FS: "DB",
+    SS: "DB",
+    K: "K",
+    P: "P",
 };
 
 // Bytes per position in the abilities section
@@ -97,33 +139,53 @@ const POSITION_GROUP = {
 // DL/LB/DB: 4 bytes (RP/RS, MS/HP, Face, INT/QU)
 // K/P: 4 bytes (RP/RS, MS/HP, Face, KA/AKB)
 const ABILITY_BYTES = {
-    "QB1": 5, "QB2": 5,
-    "RB1": 4, "RB2": 4, "RB3": 4, "RB4": 4,
-    "WR1": 4, "WR2": 4, "WR3": 4, "WR4": 4,
-    "TE1": 4, "TE2": 4,
-    "C": 3, "LG": 3, "RG": 3, "LT": 3, "RT": 3,
-    "RE": 4, "NT": 4, "LE": 4,
-    "ROLB": 4, "RILB": 4, "LILB": 4, "LOLB": 4,
-    "RCB": 4, "LCB": 4, "FS": 4, "SS": 4,
-    "K": 4, "P": 4,
+    QB1: 5,
+    QB2: 5,
+    RB1: 4,
+    RB2: 4,
+    RB3: 4,
+    RB4: 4,
+    WR1: 4,
+    WR2: 4,
+    WR3: 4,
+    WR4: 4,
+    TE1: 4,
+    TE2: 4,
+    C: 3,
+    LG: 3,
+    RG: 3,
+    LT: 3,
+    RT: 3,
+    RE: 4,
+    NT: 4,
+    LE: 4,
+    ROLB: 4,
+    RILB: 4,
+    LILB: 4,
+    LOLB: 4,
+    RCB: 4,
+    LCB: 4,
+    FS: 4,
+    SS: 4,
+    K: 4,
+    P: 4,
 };
 
-const TEAM_ABILITY_SIZE = Object.values(ABILITY_BYTES)
-    .reduce((a, b) => a + b, 0); // 117
+const TEAM_ABILITY_SIZE = Object.values(ABILITY_BYTES).reduce((a, b) => a + b, 0); // 117
 
-function cpuToFile (addr) {
+function cpuToFile(addr) {
     return addr - BANK_CPU_BASE + INES_HEADER_SIZE;
 }
 
-function nibbleHigh (byte) {
-    return ATTR_VALUES[(byte >> 4) & 0x0F];
+function nibbleHigh(byte) {
+    return ATTR_VALUES[(byte >> 4) & 0x0f];
 }
 
-function nibbleLow (byte) {
-    return ATTR_VALUES[byte & 0x0F];
+function nibbleLow(byte) {
+    return ATTR_VALUES[byte & 0x0f];
 }
 
-function extractNames (rom) {
+function extractNames(rom) {
     // Read 28 team pointers from $8000
     const team_ptrs = [];
     for (let i = 0; i < 28; i++) {
@@ -190,13 +252,13 @@ function extractNames (rom) {
         if (first_name.length > 0) {
             // Capitalize first letter, keep spaces/periods as-is
             const parts = first_name.split(" ");
-            first_name = parts.map((p) => {
-                if (p.length === 0) {
-                    return p;
-                }
-                return p.charAt(0)
-                    .toUpperCase() + p.slice(1);
-            })
+            first_name = parts
+                .map((p) => {
+                    if (p.length === 0) {
+                        return p;
+                    }
+                    return p.charAt(0).toUpperCase() + p.slice(1);
+                })
                 .join(" ");
         }
 
@@ -205,19 +267,17 @@ function extractNames (rom) {
             // Title case: first char stays uppercase, rest lowercase
             // But handle cases like "O.BRIEN" -> "O'Brien", "DE BERG" -> "De Berg"
             const parts = last_name.split(" ");
-            last_name = parts.map((part) => {
-                if (part.includes(".")) {
-                    // e.g. "O.BRIEN" or "O.NEAL"
-                    return part.split(".")
-                        .map((seg) =>
-                            seg.length > 0 ? seg.charAt(0) + seg.slice(1)
-                                .toLowerCase() : "",
-                        )
-                        .join(".");
-                }
-                return part.charAt(0) + part.slice(1)
-                    .toLowerCase();
-            })
+            last_name = parts
+                .map((part) => {
+                    if (part.includes(".")) {
+                        // e.g. "O.BRIEN" or "O.NEAL"
+                        return part
+                            .split(".")
+                            .map((seg) => (seg.length > 0 ? seg.charAt(0) + seg.slice(1).toLowerCase() : ""))
+                            .join(".");
+                    }
+                    return part.charAt(0) + part.slice(1).toLowerCase();
+                })
                 .join(" ");
         }
 
@@ -238,11 +298,11 @@ function extractNames (rom) {
     return players;
 }
 
-function extractAbilities (rom) {
+function extractAbilities(rom) {
     const abilities = [];
 
     for (let team_idx = 0; team_idx < 28; team_idx++) {
-        let offset = ABILITIES_FILE_OFFSET + (team_idx * TEAM_ABILITY_SIZE);
+        let offset = ABILITIES_FILE_OFFSET + team_idx * TEAM_ABILITY_SIZE;
 
         for (let pos_idx = 0; pos_idx < 30; pos_idx++) {
             const position = POSITIONS[pos_idx];
@@ -316,7 +376,7 @@ function extractAbilities (rom) {
     return abilities;
 }
 
-function main () {
+function main() {
     if (!fs.existsSync(ROM_PATH)) {
         console.error("ROM not found:", ROM_PATH);
         process.exit(1);
@@ -339,12 +399,18 @@ function main () {
         const a = abilities[i];
 
         if (n.team_idx !== a.team_idx || n.pos_idx !== a.pos_idx) {
-            console.error("Mismatch at index %d: name team=%d pos=%d, ability team=%d pos=%d",
-                i, n.team_idx, n.pos_idx, a.team_idx, a.pos_idx);
+            console.error(
+                "Mismatch at index %d: name team=%d pos=%d, ability team=%d pos=%d",
+                i,
+                n.team_idx,
+                n.pos_idx,
+                a.team_idx,
+                a.pos_idx,
+            );
             process.exit(1);
         }
 
-        const { team_idx, pos_idx, ability_rom_offset, face, ...attr_values } = a;
+        const { ability_rom_offset, face, ...attr_values } = a;
 
         players.push({
             id: player_id++,
@@ -376,8 +442,7 @@ function main () {
             source: "Direct ROM extraction (names + abilities)",
             rom_path: ROM_PATH,
             rom_size: rom.length,
-            extracted_at: new Date()
-                .toISOString(),
+            extracted_at: new Date().toISOString(),
             total_teams: teams.length,
             total_players: players.length,
             abilities_rom_offset: "0x" + ABILITIES_FILE_OFFSET.toString(16),
@@ -393,30 +458,46 @@ function main () {
         console.log("\nVerification - Joe Montana:");
         console.log(
             "  RP=%d, RS=%d, MS=%d, HP=%d",
-            montana.rushing_power, montana.running_speed,
-            montana.maximum_speed, montana.hitting_power,
+            montana.rushing_power,
+            montana.running_speed,
+            montana.maximum_speed,
+            montana.hitting_power,
         );
         console.log(
             "  PS=%d, PC=%d, AP=%d, APB=%d",
-            montana.passing_speed, montana.pass_control,
-            montana.accuracy_of_passing, montana.avoid_pass_block,
+            montana.passing_speed,
+            montana.pass_control,
+            montana.accuracy_of_passing,
+            montana.avoid_pass_block,
         );
     }
 
     const thurman = players.find((p) => p.name === "Thurman Thomas");
     if (thurman) {
         console.log("\nVerification - Thurman Thomas:");
-        console.log("  RP=%d, RS=%d, MS=%d, HP=%d, BC=%d, REC=%d",
-            thurman.rushing_power, thurman.running_speed, thurman.maximum_speed,
-            thurman.hitting_power, thurman.ball_control, thurman.receptions);
+        console.log(
+            "  RP=%d, RS=%d, MS=%d, HP=%d, BC=%d, REC=%d",
+            thurman.rushing_power,
+            thurman.running_speed,
+            thurman.maximum_speed,
+            thurman.hitting_power,
+            thurman.ball_control,
+            thurman.receptions,
+        );
     }
 
     const lt = players.find((p) => p.name === "Lawrence Taylor");
     if (lt) {
         console.log("\nVerification - Lawrence Taylor:");
-        console.log("  RP=%d, RS=%d, MS=%d, HP=%d, INT=%d, QU=%d",
-            lt.rushing_power, lt.running_speed, lt.maximum_speed,
-            lt.hitting_power, lt.pass_interceptions, lt.quickness);
+        console.log(
+            "  RP=%d, RS=%d, MS=%d, HP=%d, INT=%d, QU=%d",
+            lt.rushing_power,
+            lt.running_speed,
+            lt.maximum_speed,
+            lt.hitting_power,
+            lt.pass_interceptions,
+            lt.quickness,
+        );
     }
 
     fs.writeFileSync(OUTPUT_PATH, JSON.stringify(output, null, 2));

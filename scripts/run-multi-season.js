@@ -62,9 +62,12 @@ const start_time = Date.now();
  * @param {number} season_number - 1-based season index (for display only)
  * @returns {Promise<object>} Result summary
  */
-function run_season (season_number) {
+function run_season(season_number) {
     return new Promise((resolve) => {
-        const child_args = ["--quiet"];
+        const child_args = [];
+        if (quiet) {
+            child_args.push("--quiet");
+        }
         if (save_db) {
             child_args.push("--save-db");
         }
@@ -109,19 +112,18 @@ function run_season (season_number) {
 
                 console.log(
                     `[${elapsed}s] Season ${season_number}/${total_seasons} completed` +
-                    `${result.season_id ? ` (id: ${result.season_id})` : ""}` +
-                    `${result.games_completed ? ` -- ${result.games_completed} games` : ""}` +
-                    ` [${completed} done, ${failed} failed, ${running - 1} running]`,
+                        `${result.season_id ? ` (id: ${result.season_id})` : ""}` +
+                        `${result.games_completed ? ` -- ${result.games_completed} games` : ""}` +
+                        ` [${completed} done, ${failed} failed, ${running - 1} running]`,
                 );
             } else {
                 failed++;
                 console.error(
                     `[${elapsed}s] Season ${season_number}/${total_seasons} FAILED (exit ${code})` +
-                    ` [${completed} done, ${failed} failed, ${running - 1} running]`,
+                        ` [${completed} done, ${failed} failed, ${running - 1} running]`,
                 );
                 if (!quiet && stderr_buffer.trim()) {
-                    const first_line = stderr_buffer.trim()
-                        .split("\n")[0];
+                    const first_line = stderr_buffer.trim().split("\n")[0];
                     console.error(`  stderr: ${first_line}`);
                 }
             }
@@ -132,9 +134,7 @@ function run_season (season_number) {
         child.on("error", (err) => {
             failed++;
             const elapsed = ((Date.now() - start_time) / 1000).toFixed(1);
-            console.error(
-                `[${elapsed}s] Season ${season_number}/${total_seasons} spawn error: ${err.message}`,
-            );
+            console.error(`[${elapsed}s] Season ${season_number}/${total_seasons} spawn error: ${err.message}`);
             resolve({
                 season_number,
                 pid: null,
@@ -149,10 +149,10 @@ function run_season (season_number) {
 /**
  * Run all seasons with concurrency throttling.
  */
-async function run_all () {
+async function run_all() {
     const pending = [];
 
-    function start_next () {
+    function start_next() {
         if (next_season >= total_seasons) {
             return null;
         }
@@ -161,14 +161,13 @@ async function run_all () {
         running++;
         const season_num = next_season;
 
-        const promise = run_season(season_num)
-            .then((result) => {
-                running--;
-                results.push(result);
-                // Start another if there are more queued
-                const next = start_next();
-                return next || result;
-            });
+        const promise = run_season(season_num).then((result) => {
+            running--;
+            results.push(result);
+            // Start another if there are more queued
+            const next = start_next();
+            return next || result;
+        });
 
         return promise;
     }
@@ -203,9 +202,7 @@ async function run_all () {
         const avg_games = (total_games / successful.length).toFixed(0);
         console.log(`Games:     ${total_games} total (avg ${avg_games}/season)`);
 
-        const season_ids = successful
-            .filter((r) => r.season_id)
-            .map((r) => r.season_id);
+        const season_ids = successful.filter((r) => r.season_id).map((r) => r.season_id);
         if (season_ids.length > 0) {
             console.log(`Season IDs: ${season_ids.join(", ")}`);
         }
@@ -215,15 +212,11 @@ async function run_all () {
         console.log("\nFailed seasons:");
         for (const f of failures) {
             const first_err = f.stderr ? f.stderr.split("\n")[0] : null;
-            console.log(
-                `  Season ${f.season_number}: exit ${f.exit_code}${first_err ? ` -- ${first_err}` : ""}`,
-            );
+            console.log(`  Season ${f.season_number}: exit ${f.exit_code}${first_err ? ` -- ${first_err}` : ""}`);
         }
     }
 
-    const avg_per_season = successful.length > 0
-        ? (parseFloat(total_elapsed) / successful.length).toFixed(1)
-        : "N/A";
+    const avg_per_season = successful.length > 0 ? (parseFloat(total_elapsed) / successful.length).toFixed(1) : "N/A";
     console.log(`\nAvg time per season: ${avg_per_season}s (wall-clock / completed)`);
 
     // Exit with error if any failed
@@ -232,8 +225,7 @@ async function run_all () {
     }
 }
 
-run_all()
-    .catch((err) => {
-        console.error(`Fatal error: ${err.message}`);
-        process.exit(2);
-    });
+run_all().catch((err) => {
+    console.error(`Fatal error: ${err.message}`);
+    process.exit(2);
+});

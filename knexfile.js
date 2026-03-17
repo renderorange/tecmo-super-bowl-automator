@@ -2,11 +2,12 @@ import path from "path";
 import { fileURLToPath } from "url";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
+const DB_PATH = process.env.TSB_DB_PATH || path.join(__dirname, "data", "stats.db");
 
 export default {
     client: "better-sqlite3",
     connection: {
-        filename: path.join(__dirname, "data", "stats.db"),
+        filename: DB_PATH,
     },
     useNullAsDefault: true,
     pool: {

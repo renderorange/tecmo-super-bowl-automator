@@ -17,7 +17,7 @@ import db from "../src/db/index.js";
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const SEED_PATH = path.join(__dirname, "..", "src", "db", "seeds", "teams_with_attributes.json");
 
-async function seed () {
+async function seed() {
     if (!fs.existsSync(SEED_PATH)) {
         console.error("Seed data not found: %s", SEED_PATH);
         console.error("Run: node scripts/extract-rom-data.js");
@@ -29,20 +29,13 @@ async function seed () {
     console.log("Seeding %d teams, %d players...", data.teams.length, data.players.length);
 
     // Clear existing data (reverse FK order)
-    await db("injuries")
-        .del();
-    await db("player_game_stats")
-        .del();
-    await db("games")
-        .del();
-    await db("team_season_stats")
-        .del();
-    await db("seasons")
-        .del();
-    await db("players")
-        .del();
-    await db("teams")
-        .del();
+    await db("injuries").del();
+    await db("player_game_stats").del();
+    await db("games").del();
+    await db("team_season_stats").del();
+    await db("seasons").del();
+    await db("players").del();
+    await db("teams").del();
 
     // Insert teams
     await db.batchInsert("teams", data.teams, 50);
@@ -79,16 +72,9 @@ async function seed () {
     console.log("  Inserted %d players", player_rows.length);
 
     // Verify
-    const team_count = await db("teams")
-        .count("* as count")
-        .first();
-    const player_count = await db("players")
-        .count("* as count")
-        .first();
-    const qb_count = await db("players")
-        .where("position", "QB")
-        .count("* as count")
-        .first();
+    const team_count = await db("teams").count("* as count").first();
+    const player_count = await db("players").count("* as count").first();
+    const qb_count = await db("players").where("position", "QB").count("* as count").first();
 
     console.log("\nVerification:");
     console.log("  Teams:   %d", team_count.count);
@@ -96,21 +82,20 @@ async function seed () {
     console.log("  QBs:     %d", qb_count.count);
 
     // Spot check
-    const montana = await db("players")
-        .where("name", "Joe Montana")
-        .first();
+    const montana = await db("players").where("name", "Joe Montana").first();
     if (montana) {
-        console.log("\n  Joe Montana: PC=%d, PS=%d, MS=%d, APB=%d",
-            montana.pass_control, montana.passing_speed, montana.maximum_speed, montana.avoid_pass_block);
+        console.log(
+            "\n  Joe Montana: PC=%d, PS=%d, MS=%d, APB=%d",
+            montana.pass_control,
+            montana.passing_speed,
+            montana.maximum_speed,
+            montana.avoid_pass_block,
+        );
     }
 
-    const sf = await db("teams")
-        .where("abbreviation", "SF")
-        .first();
+    const sf = await db("teams").where("abbreviation", "SF").first();
     if (sf) {
-        const sf_players = await db("players")
-            .where("team_id", sf.id)
-            .orderBy("position_detail");
+        const sf_players = await db("players").where("team_id", sf.id).orderBy("position_detail");
         console.log("  49ers roster: %d players", sf_players.length);
     }
 }
@@ -122,6 +107,5 @@ seed()
     })
     .catch((err) => {
         console.error("Seed failed:", err);
-        return db.destroy()
-            .then(() => process.exit(1));
+        return db.destroy().then(() => process.exit(1));
     });

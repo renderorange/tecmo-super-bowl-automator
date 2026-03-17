@@ -17,9 +17,9 @@ local SRAM = mem.SRAM
 -- Configuration
 ------------------------------------------------------------------------
 local OUTPUT_FILE = os.getenv("TSB_OUTPUT") or "/tmp/tsb-results.jsonl"
-local MAX_GAMES = tonumber(os.getenv("TSB_MAX_GAMES")) or 238  -- 14 games/wk * 17 weeks
-local MAX_FRAMES_PER_GAME = 300000  -- ~83 min at 60fps safety limit
-local REGULAR_SEASON_WEEKS = 17     -- TSB 17-week regular season (weeks 0-16)
+local MAX_GAMES = tonumber(os.getenv("TSB_MAX_GAMES")) or 238 -- 14 games/wk * 17 weeks
+local MAX_FRAMES_PER_GAME = 300000 -- ~83 min at 60fps safety limit
+local REGULAR_SEASON_WEEKS = 17 -- TSB 17-week regular season (weeks 0-16)
 
 -- Seed RNG from time + PID-like entropy so parallel runs diverge.
 -- The random idle before intro skip shifts the game engine's internal
@@ -32,12 +32,21 @@ math.randomseed(os.time() + (tonumber(os.getenv("TSB_SEED")) or 0))
 local function press(buttons, hold, wait)
     hold = hold or 2
     wait = wait or 20
-    for i = 1, hold do joypad.write(1, buttons); emu.frameadvance() end
-    for i = 1, wait do joypad.write(1, 0); emu.frameadvance() end
+    for _ = 1, hold do
+        joypad.write(1, buttons)
+        emu.frameadvance()
+    end
+    for _ = 1, wait do
+        joypad.write(1, 0)
+        emu.frameadvance()
+    end
 end
 
 local function idle(n)
-    for i = 1, n do joypad.write(1, 0); emu.frameadvance() end
+    for _ = 1, n do
+        joypad.write(1, 0)
+        emu.frameadvance()
+    end
 end
 
 ------------------------------------------------------------------------
@@ -47,7 +56,7 @@ local function jsonEncode(val)
     if type(val) == "number" then
         return tostring(val)
     elseif type(val) == "string" then
-        return '"' .. val:gsub('\\', '\\\\'):gsub('"', '\\"') .. '"'
+        return '"' .. val:gsub("\\", "\\\\"):gsub('"', '\\"') .. '"'
     elseif type(val) == "boolean" then
         return val and "true" or "false"
     elseif type(val) == "nil" then
@@ -144,19 +153,19 @@ local function readTeamPlayerStats(teamBase)
         wr4 = readSkillStats(teamBase + SRAM.WR4_OFFSET),
         te1 = readSkillStats(teamBase + SRAM.TE1_OFFSET),
         te2 = readSkillStats(teamBase + SRAM.TE2_OFFSET),
-        re  = readDefStats(teamBase + SRAM.RE_OFFSET),
-        nt  = readDefStats(teamBase + SRAM.NT_OFFSET),
-        le  = readDefStats(teamBase + SRAM.LE_OFFSET),
+        re = readDefStats(teamBase + SRAM.RE_OFFSET),
+        nt = readDefStats(teamBase + SRAM.NT_OFFSET),
+        le = readDefStats(teamBase + SRAM.LE_OFFSET),
         rolb = readDefStats(teamBase + SRAM.ROLB_OFFSET),
         rilb = readDefStats(teamBase + SRAM.RILB_OFFSET),
         lilb = readDefStats(teamBase + SRAM.LILB_OFFSET),
         lolb = readDefStats(teamBase + SRAM.LOLB_OFFSET),
         rcb = readDefStats(teamBase + SRAM.RCB_OFFSET),
         lcb = readDefStats(teamBase + SRAM.LCB_OFFSET),
-        fs  = readDefStats(teamBase + SRAM.FS_OFFSET),
-        ss  = readDefStats(teamBase + SRAM.SS_OFFSET),
-        k   = readKStats(teamBase + SRAM.K_OFFSET),
-        p   = readPStats(teamBase + SRAM.P_OFFSET),
+        fs = readDefStats(teamBase + SRAM.FS_OFFSET),
+        ss = readDefStats(teamBase + SRAM.SS_OFFSET),
+        k = readKStats(teamBase + SRAM.K_OFFSET),
+        p = readPStats(teamBase + SRAM.P_OFFSET),
     }
 end
 
@@ -183,7 +192,7 @@ local function readGameStats()
     result.p2_players = readTeamPlayerStats(SRAM.P2_STATS)
 
     -- Derive team totals from player stats
-    for _, side in ipairs({"p1", "p2"}) do
+    for _, side in ipairs({ "p1", "p2" }) do
         local p = result[side .. "_players"]
         local rushing_attempts, rushing_yards, rushing_tds = 0, 0, 0
         local passing_attempts, passing_completions, passing_yards, passing_tds, interceptions_thrown = 0, 0, 0, 0, 0
@@ -191,7 +200,7 @@ local function readGameStats()
         local sacks, interceptions, interception_return_yards, interception_return_tds = 0, 0, 0, 0
 
         -- QBs
-        for _, qb in ipairs({p.qb1, p.qb2}) do
+        for _, qb in ipairs({ p.qb1, p.qb2 }) do
             passing_attempts = passing_attempts + qb.passing_attempts
             passing_completions = passing_completions + qb.passing_completions
             passing_yards = passing_yards + qb.passing_yards
@@ -203,7 +212,7 @@ local function readGameStats()
         end
 
         -- Skill positions (RB, WR, TE)
-        for _, key in ipairs({"rb1","rb2","rb3","rb4","wr1","wr2","wr3","wr4","te1","te2"}) do
+        for _, key in ipairs({ "rb1", "rb2", "rb3", "rb4", "wr1", "wr2", "wr3", "wr4", "te1", "te2" }) do
             local sk = p[key]
             rushing_attempts = rushing_attempts + sk.rushing_attempts
             rushing_yards = rushing_yards + sk.rushing_yards
@@ -214,7 +223,7 @@ local function readGameStats()
         end
 
         -- Defensive positions
-        for _, key in ipairs({"re","nt","le","rolb","rilb","lilb","lolb","rcb","lcb","fs","ss"}) do
+        for _, key in ipairs({ "re", "nt", "le", "rolb", "rilb", "lilb", "lolb", "rcb", "lcb", "fs", "ss" }) do
             local d = p[key]
             sacks = sacks + d.sacks
             interceptions = interceptions + d.interceptions
@@ -246,7 +255,7 @@ local function readGameStats()
     -- Compute untracked points (fumble recovery TDs, safeties, blocked kick TDs)
     -- TSB doesn't store these as individual player stats, but we can infer
     -- them from the gap between the actual score and the sum of tracked scoring.
-    for _, side in ipairs({"p1", "p2"}) do
+    for _, side in ipairs({ "p1", "p2" }) do
         local ts = result[side .. "_team_stats"]
         local score = result[side .. "_score"]
         -- Total TDs from player stats
@@ -254,7 +263,7 @@ local function readGameStats()
         -- Add KR/PR TDs from skill players
         local p = result[side .. "_players"]
         local kick_return_tds, punt_return_tds = 0, 0
-        for _, key in ipairs({"rb1","rb2","rb3","rb4","wr1","wr2","wr3","wr4","te1","te2"}) do
+        for _, key in ipairs({ "rb1", "rb2", "rb3", "rb4", "wr1", "wr2", "wr3", "wr4", "te1", "te2" }) do
             kick_return_tds = kick_return_tds + p[key].kick_return_tds
             punt_return_tds = punt_return_tds + p[key].punt_return_tds
         end
@@ -286,28 +295,30 @@ local function navigateToSeasonGameStart()
 
     -- Skip intro with B
     idle(120)
-    press({B=true}, 2, 60)
+    press({ B = true }, 2, 60)
     idle(120)
 
     -- Title screen -> START
-    press({start=true}, 2, 60)
-    for i = 1, 5 do press({start=true}, 2, 30) end
+    press({ start = true }, 2, 60)
+    for _ = 1, 5 do
+        press({ start = true }, 2, 30)
+    end
     idle(30)
 
     -- Mode select -> SEASON GAME (1 down from PRESEASON)
-    press({down=true}, 2, 15)
-    press({A=true}, 2, 60)
+    press({ down = true }, 2, 15)
+    press({ A = true }, 2, 60)
     idle(30)
 
     -- Set all 28 teams to COM via SRAM
-    memory.writebyte(0xA001, 0x80)  -- MMC3: enable SRAM writes
+    memory.writebyte(0xA001, 0x80) -- MMC3: enable SRAM writes
     for i = 0, 27 do
         memory.writebyte(SRAM.TEAM_TYPE_SEASON + i, 0x02)
     end
 
     -- Season menu -> GAME START (2 down from TEAM CONTROL)
-    press({down=true}, 2, 15)   -- SCHEDULE
-    press({down=true}, 2, 15)   -- GAME START
+    press({ down = true }, 2, 15) -- SCHEDULE
+    press({ down = true }, 2, 15) -- GAME START
 end
 
 ------------------------------------------------------------------------
@@ -322,7 +333,7 @@ local function runOneGame()
     -- After the game starts, we'll read P1_TEAM/P2_TEAM and look up records.
 
     -- Press A on GAME START to begin the game
-    press({A=true}, 2, 10)
+    press({ A = true }, 2, 10)
 
     -- Unified game loop: run frames until we're back at the season menu.
     -- During gameplay, don't press anything (COM handles it).
@@ -376,11 +387,11 @@ local function runOneGame()
         -- Do NOT press A during active gameplay (gs=$92 etc. with clock running).
         if gameplay_started and stats_read and frame % 30 == 0 then
             -- Safe to press A: we've read stats and are in post-game
-            joypad.write(1, {A=true})
+            joypad.write(1, { A = true })
         elseif not gameplay_started and frame % 60 == 0 then
             -- Pre-game: press A for coin toss etc.
             -- (COM mode shouldn't need this, but just in case)
-            joypad.write(1, {A=true})
+            joypad.write(1, { A = true })
         else
             joypad.write(1, 0)
         end
@@ -389,13 +400,14 @@ local function runOneGame()
 
         -- Safety log for very long games (5+ min wall-clock)
         if frame % 120000 == 0 then
-            print(string.format("  [long game] f=%d q=%d mins=%d gs=$%02X",
-                frame, q, mins, gs))
+            print(string.format("  [long game] f=%d q=%d mins=%d gs=$%02X", frame, q, mins, gs))
         end
     end
 
     -- Timed out
-    if stats then return stats end
+    if stats then
+        return stats
+    end
     return nil
 end
 
@@ -447,9 +459,18 @@ local function main()
         outFile:write(jsonEncode(stats) .. "\n")
         outFile:flush()
 
-        print(string.format("Game %d: %s %d - %s %d (wk %d, g %d)",
-            game_count, stats.p1_team, stats.p1_score,
-            stats.p2_team, stats.p2_score, stats.week + 1, stats.game_in_week + 1))
+        print(
+            string.format(
+                "Game %d: %s %d - %s %d (wk %d, g %d)",
+                game_count,
+                stats.p1_team,
+                stats.p1_score,
+                stats.p2_team,
+                stats.p2_score,
+                stats.week + 1,
+                stats.game_in_week + 1
+            )
+        )
     end
 
     outFile:close()

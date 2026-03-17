@@ -25,7 +25,10 @@ try {
 
     const game = results[0];
     console.log(`\nResult: ${game.p1_team} ${game.p1_score} - ${game.p2_team} ${game.p2_score}`);
-    console.log(`QB1 passing: ${game.p1_players.qb1.pass_comp}/${game.p1_players.qb1.pass_att} ${game.p1_players.qb1.pass_yds} yds`);
+    console.log(
+        `QB1 passing: ${game.p1_players.qb1.passing_completions}` +
+            `/${game.p1_players.qb1.passing_attempts} ${game.p1_players.qb1.passing_yards} yds`,
+    );
     console.log("\nIntegration test passed!");
 
     // Clean up

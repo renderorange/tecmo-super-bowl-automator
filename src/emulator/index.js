@@ -7,15 +7,14 @@ import readline from "readline";
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
-const DEFAULT_ROM = process.env.TECMO_ROM ||
-    path.join(process.env.HOME, "roms/nes/Tecmo Super Bowl (USA).nes");
+const DEFAULT_ROM = process.env.TECMO_ROM || path.join(process.env.HOME, "roms/nes/Tecmo Super Bowl (USA).nes");
 
 const DEFAULT_NESL = process.env.NESL_PATH || "/tmp/nesl/build/nesl";
 
 const DEFAULT_LUA_SCRIPT = path.join(__dirname, "lua", "controller.lua");
 
 export class Emulator {
-    constructor (options = {}) {
+    constructor(options = {}) {
         this.romPath = options.romPath || DEFAULT_ROM;
         this.neslPath = options.neslPath || DEFAULT_NESL;
         this.luaScript = options.luaScript || DEFAULT_LUA_SCRIPT;
@@ -39,7 +38,7 @@ export class Emulator {
      * @param {function} options.onProgress - Callback for progress messages (receives string)
      * @returns {Promise<object[]>} Array of game result objects
      */
-    async run (options = {}) {
+    async run(options = {}) {
         const maxGames = options.maxGames || this.maxGames;
         const outputFile = options.outputFile || this.outputFile;
         const onGame = options.onGame || null;
@@ -73,34 +72,76 @@ export class Emulator {
         this.running = true;
         const games = [];
         const pendingCallbacks = [];
-        let next_line_index = 0;
+        let file_offset = 0;
+        let partial_line_buffer = "";
+        const parsed_line_queue = [];
 
         return new Promise((resolve, reject) => {
             // Parse stdout line-by-line for progress reporting
             const rl = readline.createInterface({ input: this.process.stdout });
+            const refreshParsedLines = () => {
+                if (!fs.existsSync(outputFile)) {
+                    return;
+                }
+
+                const stats = fs.statSync(outputFile);
+                if (stats.size < file_offset) {
+                    file_offset = 0;
+                    partial_line_buffer = "";
+                    parsed_line_queue.length = 0;
+                }
+
+                if (stats.size === file_offset) {
+                    return;
+                }
+
+                const fd = fs.openSync(outputFile, "r");
+                try {
+                    const bytes_to_read = stats.size - file_offset;
+                    const chunk = Buffer.alloc(bytes_to_read);
+                    fs.readSync(fd, chunk, 0, bytes_to_read, file_offset);
+                    file_offset = stats.size;
+
+                    const text = partial_line_buffer + chunk.toString("utf8");
+                    const lines = text.split("\n");
+                    partial_line_buffer = lines.pop() || "";
+
+                    for (const parsed_line of lines) {
+                        if (parsed_line.trim()) {
+                            parsed_line_queue.push(parsed_line);
+                        }
+                    }
+                } finally {
+                    fs.closeSync(fd);
+                }
+            };
+
+            const nextParsedGame = async () => {
+                for (let i = 0; i < 5; i++) {
+                    refreshParsedLines();
+                    if (parsed_line_queue.length > 0) {
+                        return parsed_line_queue.shift();
+                    }
+                    await new Promise((resolveDelay) => setTimeout(resolveDelay, 5));
+                }
+                return null;
+            };
+
             rl.on("line", (line) => {
                 if (onProgress) {
                     onProgress(line);
                 }
-                // When a game completes, the Lua script prints "Game N: ..."
-                // and writes a JSON line to the output file.
-                // Read the specific line for this game (by index), not the
-                // last line, to avoid reading stale data when the Lua script
-                // writes faster than callbacks process.
                 if (line.startsWith("Game ") && onGame) {
-                    const target_line = next_line_index;
-                    next_line_index++;
                     rl.pause();
                     const callbackPromise = (async () => {
                         try {
-                            const content = fs.readFileSync(outputFile, "utf8")
-                                .trim();
-                            const lines = content.split("\n");
-                            const game_line = lines[target_line];
+                            const game_line = await nextParsedGame();
                             if (game_line) {
                                 const parsed = JSON.parse(game_line);
                                 games.push(parsed);
                                 await onGame(parsed, games.length);
+                            } else {
+                                console.error("onGame callback warning: missing JSONL line for game event");
                             }
                         } catch (e) {
                             console.error("onGame callback error:", e.message);
@@ -128,9 +169,7 @@ export class Emulator {
 
                 if (code !== 0 && code !== null) {
                     const stderrTrimmed = this.lastStderr.trim();
-                    reject(new Error(
-                        `nesl exited with code ${code}${stderrTrimmed ? ": " + stderrTrimmed : ""}`,
-                    ));
+                    reject(new Error(`nesl exited with code ${code}${stderrTrimmed ? ": " + stderrTrimmed : ""}`));
                     return;
                 }
 
@@ -150,23 +189,23 @@ export class Emulator {
     /**
      * Parse the JSONL output file into an array of game objects.
      */
-    parseResults (filePath) {
+    parseResults(filePath) {
         const outputFile = filePath || this.outputFile;
         if (!fs.existsSync(outputFile)) {
             return [];
         }
 
-        const content = fs.readFileSync(outputFile, "utf8")
-            .trim();
+        const content = fs.readFileSync(outputFile, "utf8").trim();
         if (!content) {
             return [];
         }
 
-        return content.split("\n")
-            .map((line, i) => {
+        return content
+            .split("\n")
+            .map((line) => {
                 try {
                     return JSON.parse(line);
-                } catch (e) {
+                } catch {
                     return null;
                 }
             })
@@ -176,14 +215,14 @@ export class Emulator {
     /**
      * Check if the emulator process is currently running.
      */
-    isRunning () {
+    isRunning() {
         return this.running;
     }
 
     /**
      * Stop the emulator process.
      */
-    stop () {
+    stop() {
         if (this.process) {
             this.process.kill("SIGTERM");
             this.running = false;
@@ -194,7 +233,7 @@ export class Emulator {
     /**
      * Force-kill the emulator process.
      */
-    forceStop () {
+    forceStop() {
         if (this.process) {
             this.process.kill("SIGKILL");
             this.running = false;
