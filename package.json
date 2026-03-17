@@ -5,7 +5,7 @@
     "main": "bin/cli.js",
     "type": "module",
     "scripts": {
-        "test": "NODE_OPTIONS=--experimental-vm-modules jest",
+        "test": "NODE_OPTIONS=--experimental-vm-modules jest --forceExit",
         "test:watch": "NODE_OPTIONS=--experimental-vm-modules jest --watch",
         "test:coverage": "NODE_OPTIONS=--experimental-vm-modules jest --coverage",
         "lint": "node node_modules/eslint/bin/eslint.js .",

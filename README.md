@@ -197,7 +197,7 @@ All yardage stats are 16-bit little-endian (low byte, high byte).
 # Install dependencies
 npm install
 
-# Run database migrations
+# Run database migrations (setup database)
 npm run db:migrate
 
 # Extract player/team data from ROM

@@ -72,36 +72,39 @@ export class Emulator {
 
         this.running = true;
         const games = [];
+        const pendingCallbacks = [];
 
         return new Promise((resolve, reject) => {
             // Parse stdout line-by-line for progress reporting
             const rl = readline.createInterface({ input: this.process.stdout });
-            rl.on("line", async (line) => {
+            rl.on("line", (line) => {
                 if (onProgress) {
                     onProgress(line);
                 }
                 // When a game completes, the Lua script prints "Game N: ..."
                 // and writes a JSON line to the output file.
                 if (line.startsWith("Game ") && onGame) {
-                    // Pause readline to ensure sequential processing of
-                    // async callbacks (e.g., database writes). Without this,
-                    // the next line event fires immediately and callbacks
-                    // run concurrently.
                     rl.pause();
-                    try {
-                        const content = fs.readFileSync(outputFile, "utf8")
-                            .trim();
-                        const lines = content.split("\n");
-                        const lastLine = lines[lines.length - 1];
-                        if (lastLine) {
-                            const parsed = JSON.parse(lastLine);
-                            games.push(parsed);
-                            await onGame(parsed, games.length);
+                    const callbackPromise = (async () => {
+                        try {
+                            const content = fs.readFileSync(outputFile, "utf8")
+                                .trim();
+                            const lines = content.split("\n");
+                            const lastLine = lines[lines.length - 1];
+                            if (lastLine) {
+                                const parsed = JSON.parse(lastLine);
+                                games.push(parsed);
+                                await onGame(parsed, games.length);
+                            }
+                        } catch (e) {
+                            console.error("onGame callback error:", e.message);
+                        } finally {
+                            if (!rl.closed) {
+                                rl.resume();
+                            }
                         }
-                    } catch (e) {
-                        // File may not be written yet, ignore
-                    }
-                    rl.resume();
+                    })();
+                    pendingCallbacks.push(callbackPromise);
                 }
             });
 
@@ -110,9 +113,12 @@ export class Emulator {
                 this.lastStderr += data.toString();
             });
 
-            this.process.on("close", (code) => {
+            this.process.on("close", async (code) => {
                 this.running = false;
                 this.process = null;
+
+                // Wait for all pending onGame callbacks to complete
+                await Promise.all(pendingCallbacks);
 
                 if (code !== 0 && code !== null) {
                     const stderrTrimmed = this.lastStderr.trim();
@@ -155,7 +161,6 @@ export class Emulator {
                 try {
                     return JSON.parse(line);
                 } catch (e) {
-                    console.error(`Failed to parse game ${i + 1}: ${e.message}`);
                     return null;
                 }
             })
