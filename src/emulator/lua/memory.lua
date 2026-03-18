@@ -49,15 +49,26 @@ local ADDR = {
 -- Writes require MMC3 enable: memory.writebyte(0xA001, 0x80)
 ------------------------------------------------------------------------
 local SRAM = {
+    -- CPU boosts ($6678, 6 bytes)
+    CPU_BOOSTS = 0x6678, -- 6 bytes: def_ms, off_ms, def_int, pass_ctrl, reception, boost_idx
+
+    -- Playbook edits ($667E, 16 bytes)
+    P1_PLAYBOOK = 0x667E, -- 8 bytes
+    P2_PLAYBOOK = 0x6686, -- 8 bytes
+
     -- In-game team stats (from sram_variables.asm)
-    P1_FIRST_DOWNS = 0x668E,
-    P2_FIRST_DOWNS = 0x668F,
-    P1_TEAM_RUSH_ATTEMPTS = 0x6690,
-    P2_TEAM_RUSH_ATTEMPTS = 0x6691,
-    P1_TEAM_RUSH_YARDS = 0x6692, -- 2 bytes little-endian
-    P2_TEAM_RUSH_YARDS = 0x6694, -- 2 bytes little-endian
-    P1_TEAM_PASS_YARDS = 0x6696, -- 2 bytes little-endian
-    P2_TEAM_PASS_YARDS = 0x6698, -- 2 bytes little-endian
+    -- IN_GAME_TEAM_STATS[] starts at $668E (after CPU_BOOSTS $6678 + 6 = $667E,
+    -- then playbooks $667E + 16 = $668E)
+    -- NOTE: Only first_downs and rush_att are populated in COM vs COM mode.
+    --       rush_yards and pass_yards are always 0 - use player-derived stats instead.
+    P1_FIRST_DOWNS = 0x668E, -- Works in COM mode
+    P2_FIRST_DOWNS = 0x668F, -- Works in COM mode
+    P1_TEAM_RUSH_ATTEMPTS = 0x6690, -- Works in COM mode
+    P2_TEAM_RUSH_ATTEMPTS = 0x6691, -- Works in COM mode
+    P1_TEAM_RUSH_YARDS = 0x6692, -- Always 0 in COM mode (2 bytes)
+    P2_TEAM_RUSH_YARDS = 0x6694, -- Always 0 in COM mode (2 bytes)
+    P1_TEAM_PASS_YARDS = 0x6696, -- Always 0 in COM mode (2 bytes)
+    P2_TEAM_PASS_YARDS = 0x6698, -- Always 0 in COM mode (2 bytes)
 
     -- Team control types (28 bytes, one per team: 0=MAN,1=COA,2=COM,3=SKP)
     TEAM_TYPE_SEASON = 0x669B,
@@ -119,6 +130,29 @@ local SRAM = {
     K_OFFSET = 235,
     -- P: 3 bytes
     P_OFFSET = 239,
+    -- After player stats (242 bytes), the block continues:
+    -- Playbook: 4 bytes at offset 242
+    -- Starters: 4 bytes at offset 246
+    -- Injuries: 3 bytes at offset 250 (2-bit status per skill player, 4 per byte)
+    -- Conditions: 8 bytes at offset 253 (2-bit condition per roster slot, 4 per byte)
+    PLAYBOOK_OFFSET = 242,
+    STARTERS_OFFSET = 246,
+    INJURIES_OFFSET = 250,
+    CONDITIONS_OFFSET = 253,
+
+    -- In-game starters ($6610 for P1, $6644 for P2)
+    -- Contains team_id + roster_id pairs for each active position
+    P1_STARTERS = 0x6610,
+    P2_STARTERS = 0x6644,
+    -- Starter block layout (offsets from starters base):
+    -- Skill starters: 12 bytes (6 pairs: QB, RB, WR, TE targets)
+    -- OL starters: 10 bytes (5 pairs)
+    -- DEF starters: 22 bytes (11 pairs)
+    -- K starter: 2 bytes, P starter: 2 bytes
+    -- KR starter: 2 bytes, PR starter: 2 bytes
+    -- Total: 52 bytes per team
+    KR_STARTER_OFFSET = 48, -- Kick return specialist (2 bytes: team_id, roster_id)
+    PR_STARTER_OFFSET = 50, -- Punt return specialist (2 bytes: team_id, roster_id)
 }
 
 ------------------------------------------------------------------------
@@ -243,6 +277,91 @@ local function readBytes(addr, len)
 end
 
 ------------------------------------------------------------------------
+-- Injury/condition helpers
+------------------------------------------------------------------------
+
+-- Injury status values (2-bit per player, packed 4 per byte)
+local INJURY_STATUS = {
+    [0] = "healthy",
+    [1] = "probable",
+    [2] = "questionable",
+    [3] = "doubtful",
+}
+
+-- Condition values (2-bit per player, packed 4 per byte)
+local CONDITION_STATUS = {
+    [0] = "bad",
+    [1] = "average",
+    [2] = "good",
+    [3] = "excellent",
+}
+
+-- Position names for injury bytes (only skill players can be injured)
+local INJURY_POSITIONS = {
+    [0] = "qb1", [1] = "qb2",
+    [2] = "rb1", [3] = "rb2", [4] = "rb3", [5] = "rb4",
+    [6] = "wr1", [7] = "wr2", [8] = "wr3", [9] = "wr4",
+    [10] = "te1", [11] = "te2",
+}
+
+-- Position names for condition bytes (all 30 roster positions)
+local CONDITION_POSITIONS = {
+    [0] = "qb1", [1] = "qb2",
+    [2] = "rb1", [3] = "rb2", [4] = "rb3", [5] = "rb4",
+    [6] = "wr1", [7] = "wr2", [8] = "wr3", [9] = "wr4",
+    [10] = "te1", [11] = "te2",
+    [12] = "c", [13] = "lg", [14] = "rg", [15] = "lt", [16] = "rt",
+    [17] = "re", [18] = "nt", [19] = "le",
+    [20] = "rolb", [21] = "rilb", [22] = "lilb", [23] = "lolb",
+    [24] = "rcb", [25] = "lcb", [26] = "fs", [27] = "ss",
+    [28] = "k", [29] = "p",
+}
+
+-- Read injury statuses from 3 packed bytes at the given SRAM address.
+-- Returns a table of {position_key = status_string} for injured players,
+-- plus an "all" subtable with every player's raw status (0-3).
+local function readInjuries(base_addr)
+    local injured = {}
+    local all = {}
+    for byte_idx = 0, 2 do
+        local b = memory.readbyte(base_addr + byte_idx)
+        for slot = 0, 3 do
+            local roster_id = byte_idx * 4 + slot
+            local status = bit.band(bit.rshift(b, slot * 2), 0x03)
+            local pos = INJURY_POSITIONS[roster_id]
+            if pos then
+                all[pos] = status
+                if status > 0 then
+                    injured[pos] = INJURY_STATUS[status]
+                end
+            end
+        end
+    end
+    return injured, all
+end
+
+-- Read condition values from 8 packed bytes at the given SRAM address.
+-- Returns a table of {position_key = status_string} for all 30 positions,
+-- plus a raw table of {position_key = raw_value (0-3)}.
+local function readConditions(base_addr)
+    local conditions = {}
+    local raw = {}
+    for byte_idx = 0, 7 do
+        local b = memory.readbyte(base_addr + byte_idx)
+        for slot = 0, 3 do
+            local roster_id = byte_idx * 4 + slot
+            local status = bit.band(bit.rshift(b, slot * 2), 0x03)
+            local pos = CONDITION_POSITIONS[roster_id]
+            if pos then
+                conditions[pos] = CONDITION_STATUS[status]
+                raw[pos] = status
+            end
+        end
+    end
+    return conditions, raw
+end
+
+------------------------------------------------------------------------
 -- Season standings helpers
 ------------------------------------------------------------------------
 
@@ -280,9 +399,15 @@ return {
     K_STAT = K_STAT,
     P_STAT = P_STAT,
     TEAM_NAMES = TEAM_NAMES,
+    INJURY_STATUS = INJURY_STATUS,
+    CONDITION_STATUS = CONDITION_STATUS,
+    INJURY_POSITIONS = INJURY_POSITIONS,
+    CONDITION_POSITIONS = CONDITION_POSITIONS,
     read16 = read16,
     read16_signed = read16_signed,
     readBytes = readBytes,
+    readInjuries = readInjuries,
+    readConditions = readConditions,
     getTeamSeasonBase = getTeamSeasonBase,
     readTeamRecord = readTeamRecord,
 }

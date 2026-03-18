@@ -9,7 +9,7 @@ const __dirname = path.dirname(__filename);
 
 const DEFAULT_ROM = process.env.TECMO_ROM || path.join(process.env.HOME, "roms/nes/Tecmo Super Bowl (USA).nes");
 
-const DEFAULT_NESL = process.env.NESL_PATH || "/tmp/nesl/build/nesl";
+const DEFAULT_NESL = process.env.NESL_PATH || "nesl";
 
 const DEFAULT_LUA_SCRIPT = path.join(__dirname, "lua", "controller.lua");
 
@@ -47,7 +47,8 @@ export class Emulator {
         if (!fs.existsSync(this.romPath)) {
             throw new Error(`ROM not found: ${this.romPath}`);
         }
-        if (!fs.existsSync(this.neslPath)) {
+        const has_path_separator = /[\\/]/.test(this.neslPath);
+        if (has_path_separator && !fs.existsSync(this.neslPath)) {
             throw new Error(`nesl not found: ${this.neslPath}. Build it first (see README).`);
         }
 

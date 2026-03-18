@@ -63,7 +63,7 @@ export function up(knex) {
             table.timestamp("started_at").defaultTo(knex.fn.now());
             table.timestamp("completed_at");
             table.integer("games_completed").defaultTo(0);
-            table.integer("total_games").defaultTo(240);
+            table.integer("total_games").defaultTo(238);
             table.string("status").defaultTo("pending");
         })
 
@@ -118,8 +118,10 @@ export function up(knex) {
             table.integer("home_interceptions").defaultTo(0);
             table.integer("home_interception_return_yards").defaultTo(0);
             table.integer("home_interception_return_tds").defaultTo(0);
+            table.integer("home_kick_return_attempts").defaultTo(0);
             table.integer("home_kick_return_yards").defaultTo(0);
             table.integer("home_kick_return_tds").defaultTo(0);
+            table.integer("home_punt_return_attempts").defaultTo(0);
             table.integer("home_punt_return_yards").defaultTo(0);
             table.integer("home_punt_return_tds").defaultTo(0);
             table.integer("home_punts").defaultTo(0);
@@ -147,8 +149,10 @@ export function up(knex) {
             table.integer("away_interceptions").defaultTo(0);
             table.integer("away_interception_return_yards").defaultTo(0);
             table.integer("away_interception_return_tds").defaultTo(0);
+            table.integer("away_kick_return_attempts").defaultTo(0);
             table.integer("away_kick_return_yards").defaultTo(0);
             table.integer("away_kick_return_tds").defaultTo(0);
+            table.integer("away_punt_return_attempts").defaultTo(0);
             table.integer("away_punt_return_yards").defaultTo(0);
             table.integer("away_punt_return_tds").defaultTo(0);
             table.integer("away_punts").defaultTo(0);
@@ -175,6 +179,12 @@ export function up(knex) {
             table.integer("away_pre_points_against").defaultTo(0);
             table.integer("away_pre_pass_yards_allowed").defaultTo(0);
             table.integer("away_pre_rush_yards_allowed").defaultTo(0);
+
+            // Game metadata (JSON-encoded)
+            table.text("weekly_matchups"); // JSON: 14 matchup pairs for this week
+            table.text("home_playbook"); // JSON: 8-byte playbook array
+            table.text("away_playbook"); // JSON: 8-byte playbook array
+            table.text("cpu_boosts"); // JSON: CPU boost values
 
             table.index(["season_id", "week"]);
             table.index("home_team_id");
@@ -207,7 +217,6 @@ export function up(knex) {
             table.integer("punt_return_yards").defaultTo(0);
             table.integer("punt_return_tds").defaultTo(0);
 
-            table.integer("tackles").defaultTo(0);
             table.integer("sacks").defaultTo(0);
             table.integer("interceptions").defaultTo(0);
             table.integer("interception_return_yards").defaultTo(0);
@@ -223,8 +232,12 @@ export function up(knex) {
             table.integer("punts").defaultTo(0);
             table.integer("punt_yards").defaultTo(0);
 
-            table.integer("fumbles").defaultTo(0);
-            table.boolean("is_injured").defaultTo(false);
+            // Injury: 0=healthy, 1=probable, 2=questionable, 3=doubtful
+            // Only offensive skill players (QB, RB, WR, TE) can be injured in TSB.
+            table.integer("injury_status").defaultTo(0);
+            // Condition: 0=bad, 1=average, 2=good, 3=excellent
+            // All 30 roster positions have conditions; affects sim performance.
+            table.integer("condition_status").defaultTo(1);
 
             table.index("game_id");
             table.index("player_id");

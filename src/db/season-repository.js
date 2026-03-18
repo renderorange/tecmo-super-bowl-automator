@@ -10,6 +10,12 @@
 import db from "./index.js";
 
 /**
+ * Map of condition string labels (from Lua readConditions) to
+ * integer values stored in the database.
+ */
+const CONDITION_MAP = { bad: 0, average: 1, good: 2, excellent: 3 };
+
+/**
  * Map of emulator position keys (from Lua controller output) to
  * position_detail values in the database.
  */
@@ -246,14 +252,40 @@ export class SeasonRepository {
                     away_pre_points_against: away_pre.points_against || 0,
                     away_pre_pass_yards_allowed: away_pre.passing_yards_allowed || 0,
                     away_pre_rush_yards_allowed: away_pre.rushing_yards_allowed || 0,
+
+                    // Return attempt counts
+                    home_kick_return_attempts: home_stats.kick_return_attempts || 0,
+                    away_kick_return_attempts: away_stats.kick_return_attempts || 0,
+                    home_punt_return_attempts: home_stats.punt_return_attempts || 0,
+                    away_punt_return_attempts: away_stats.punt_return_attempts || 0,
+
+                    // JSON metadata
+                    weekly_matchups: game_data.weekly_matchups ? JSON.stringify(game_data.weekly_matchups) : null,
+                    home_playbook: game_data.p1_playbook ? JSON.stringify(game_data.p1_playbook) : null,
+                    away_playbook: game_data.p2_playbook ? JSON.stringify(game_data.p2_playbook) : null,
+                    cpu_boosts: game_data.cpu_boosts ? JSON.stringify(game_data.cpu_boosts) : null,
                 })
                 .returning("id");
 
             const game_id_val = typeof game_id === "object" ? game_id.id : game_id;
 
             // Save player stats for both teams
-            await this.save_player_stats(game_id_val, home_team_id, game_data.p1_players, trx);
-            await this.save_player_stats(game_id_val, away_team_id, game_data.p2_players, trx);
+            await this.save_player_stats(
+                game_id_val,
+                home_team_id,
+                game_data.p1_players,
+                trx,
+                game_data.p1_injury_detail || {},
+                game_data.p1_conditions || {},
+            );
+            await this.save_player_stats(
+                game_id_val,
+                away_team_id,
+                game_data.p2_players,
+                trx,
+                game_data.p2_injury_detail || {},
+                game_data.p2_conditions || {},
+            );
 
             return game_id_val;
         });
@@ -287,9 +319,12 @@ export class SeasonRepository {
      * @param {number} game_id
      * @param {number} team_id
      * @param {object} players_data - Player stats from emulator output (p1_players or p2_players)
+     * @param {object} trx - Knex transaction (defaults to this.db)
+     * @param {object} injuries_raw - Injury detail by position key (e.g., {qb1: 0, rb1: 3})
+     * @param {object} conditions - Condition labels by position key (e.g., {qb1: "average", rb1: "good"})
      * @returns {Promise<void>}
      */
-    async save_player_stats(game_id, team_id, players_data, trx = this.db) {
+    async save_player_stats(game_id, team_id, players_data, trx = this.db, injuries_raw = {}, conditions = {}) {
         const player_stats = [];
 
         if (!players_data) {
@@ -312,8 +347,14 @@ export class SeasonRepository {
                 continue;
             }
 
+            // Build injury/condition extras for this player
+            const injury_val = injuries_raw[position_key] !== undefined ? injuries_raw[position_key] : 0;
+            const cond_str = conditions[position_key];
+            const condition_val = cond_str !== undefined ? (CONDITION_MAP[cond_str] ?? 1) : 1;
+            const extras = { injury_status: injury_val, condition_status: condition_val };
+
             // Build player stat record based on position type
-            const stat_record = this.build_stat_record(game_id, player_id, position_key, stats);
+            const stat_record = this.build_stat_record(game_id, player_id, position_key, stats, extras);
 
             if (stat_record) {
                 player_stats.push(stat_record);
@@ -332,9 +373,10 @@ export class SeasonRepository {
      * @param {number} player_id
      * @param {string} position_key - Emulator position key (e.g., 'qb1', 'rb1')
      * @param {object} stats - Stats from emulator
+     * @param {object} extras - Additional fields to spread into the record (e.g., injury_status, condition_status)
      * @returns {object|null} Stat record for database
      */
-    build_stat_record(game_id, player_id, position_key, stats) {
+    build_stat_record(game_id, player_id, position_key, stats, extras = {}) {
         const base_record = {
             game_id: game_id,
             player_id: player_id,
@@ -351,6 +393,7 @@ export class SeasonRepository {
                 rushing_attempts: stats.rushing_attempts || 0,
                 rushing_yards: stats.rushing_yards || 0,
                 rushing_tds: stats.rushing_tds || 0,
+                ...extras,
             };
         }
 
@@ -369,6 +412,7 @@ export class SeasonRepository {
                 punt_return_attempts: stats.punt_return_attempts || 0,
                 punt_return_yards: stats.punt_return_yards || 0,
                 punt_return_tds: stats.punt_return_tds || 0,
+                ...extras,
             };
         }
 
@@ -379,6 +423,7 @@ export class SeasonRepository {
                 interceptions: stats.interceptions || 0,
                 interception_return_yards: stats.interception_return_yards || 0,
                 interception_return_tds: stats.interception_return_tds || 0,
+                ...extras,
             };
         }
 
@@ -389,6 +434,7 @@ export class SeasonRepository {
                 xp_made: stats.xp_made || 0,
                 fg_attempts: stats.fg_attempts || 0,
                 fg_made: stats.fg_made || 0,
+                ...extras,
             };
         }
 
@@ -397,10 +443,11 @@ export class SeasonRepository {
                 ...base_record,
                 punts: stats.punts || 0,
                 punt_yards: stats.punt_yards || 0,
+                ...extras,
             };
         }
 
-        return base_record;
+        return { ...base_record, ...extras };
     }
 
     /**

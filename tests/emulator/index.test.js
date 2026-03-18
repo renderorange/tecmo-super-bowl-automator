@@ -36,9 +36,9 @@ describe("Emulator", () => {
             expect(emulator.neslPath).toBe(customPath);
         });
 
-        test("defaults nesl path to /tmp/nesl/build/nesl", () => {
+        test("defaults nesl path to NESL_PATH env var or PATH lookup", () => {
             emulator = new Emulator();
-            expect(emulator.neslPath).toBe("/tmp/nesl/build/nesl");
+            expect(emulator.neslPath).toBe(process.env.NESL_PATH || "nesl");
         });
 
         test("accepts custom output file", () => {

@@ -1,7 +1,7 @@
 -- Tecmo Super Bowl Season Simulator - Game Controller
 -- Runs COM vs COM season games via nesl, outputs JSON stats per game.
 --
--- Usage: /tmp/nesl/build/nesl src/emulator/lua/controller.lua "path/to/rom.nes"
+-- Usage: nesl src/emulator/lua/controller.lua "path/to/rom.nes"
 -- Output: writes JSON lines to the file specified by TSB_OUTPUT env var
 --         (default: /tmp/tsb-results.jsonl), one JSON object per game.
 
@@ -183,10 +183,6 @@ local function readGameStats()
     result.p1_score = memory.readbyte(ADDR.P1_TOTAL_SCORE)
     result.p2_score = memory.readbyte(ADDR.P2_TOTAL_SCORE)
 
-    -- Team stats: derive from individual player stats (SRAM team stats
-    -- block may not be populated in COM mode)
-    -- These get computed after player stats are read (below)
-
     -- Individual player stats
     result.p1_players = readTeamPlayerStats(SRAM.P1_STATS)
     result.p2_players = readTeamPlayerStats(SRAM.P2_STATS)
@@ -266,8 +262,9 @@ local function readGameStats()
             first_downs = side == "p1" and memory.readbyte(SRAM.P1_FIRST_DOWNS) or memory.readbyte(SRAM.P2_FIRST_DOWNS),
             in_game_rushing_attempts = side == "p1" and memory.readbyte(SRAM.P1_TEAM_RUSH_ATTEMPTS)
                 or memory.readbyte(SRAM.P2_TEAM_RUSH_ATTEMPTS),
-            in_game_rushing_yards = side == "p1" and mem.read16(SRAM.P1_TEAM_RUSH_YARDS) or mem.read16(SRAM.P2_TEAM_RUSH_YARDS),
-            in_game_passing_yards = side == "p1" and mem.read16(SRAM.P1_TEAM_PASS_YARDS) or mem.read16(SRAM.P2_TEAM_PASS_YARDS),
+            -- SRAM team rush/pass yards are always 0 in COM mode; use player-derived totals
+            in_game_rushing_yards = rushing_yards,
+            in_game_passing_yards = passing_yards,
         }
     end
 
@@ -287,9 +284,56 @@ local function readGameStats()
         ts.untracked_pts = score - tracked_pts
     end
 
+    -- Injuries: 2-bit status per skill player (QB1-TE2), packed 4 per byte, 3 bytes per team
+    -- Status: 0=healthy, 1=probable, 2=questionable, 3=doubtful
+    -- Only offensive skill players (roster IDs 0-11) can be injured.
+    local p1_injured, p1_injury_all = mem.readInjuries(SRAM.P1_STATS + SRAM.INJURIES_OFFSET)
+    local p2_injured, p2_injury_all = mem.readInjuries(SRAM.P2_STATS + SRAM.INJURIES_OFFSET)
+    result.p1_injuries = p1_injured
+    result.p2_injuries = p2_injured
+    result.p1_injury_detail = p1_injury_all
+    result.p2_injury_detail = p2_injury_all
+
+    -- Conditions: 2-bit value per roster slot (all 30 positions), packed 4 per byte, 8 bytes per team
+    -- Values: 0=bad, 1=average, 2=good, 3=excellent
+    -- Conditions affect sim performance via skill modifiers.
+    local p1_cond = mem.readConditions(SRAM.P1_STATS + SRAM.CONDITIONS_OFFSET)
+    local p2_cond = mem.readConditions(SRAM.P2_STATS + SRAM.CONDITIONS_OFFSET)
+    result.p1_conditions = p1_cond
+    result.p2_conditions = p2_cond
+
     -- Season context
     result.week = memory.readbyte(SRAM.CURRENT_WEEK)
     result.game_in_week = memory.readbyte(SRAM.CURRENT_GAME)
+
+    -- Weekly matchup schedule (28 bytes: 14 pairs of team IDs)
+    local matchups = {}
+    for i = 0, 13 do
+        local home = memory.readbyte(SRAM.WEEKLY_MATCHUPS + i * 2)
+        local away = memory.readbyte(SRAM.WEEKLY_MATCHUPS + i * 2 + 1)
+        matchups[i + 1] = { home = home, away = away }
+    end
+    result.weekly_matchups = matchups
+
+    -- CPU boosts (6 bytes: def_ms, off_ms, def_int, pass_ctrl, reception, boost_idx)
+    result.cpu_boosts = {
+        def_ms = memory.readbyte(SRAM.CPU_BOOSTS),
+        off_ms = memory.readbyte(SRAM.CPU_BOOSTS + 1),
+        def_int = memory.readbyte(SRAM.CPU_BOOSTS + 2),
+        pass_ctrl = memory.readbyte(SRAM.CPU_BOOSTS + 3),
+        reception = memory.readbyte(SRAM.CPU_BOOSTS + 4),
+        boost_idx = memory.readbyte(SRAM.CPU_BOOSTS + 5),
+    }
+
+    -- Playbook selections (8 bytes per team)
+    local p1_pb = {}
+    local p2_pb = {}
+    for i = 0, 7 do
+        p1_pb[i + 1] = memory.readbyte(SRAM.P1_PLAYBOOK + i)
+        p2_pb[i + 1] = memory.readbyte(SRAM.P2_PLAYBOOK + i)
+    end
+    result.p1_playbook = p1_pb
+    result.p2_playbook = p2_pb
 
     return result
 end
@@ -480,6 +524,14 @@ local function main()
         local stats = runOneGame()
         if not stats then
             print(string.format("Game %d: TIMEOUT", game_count))
+            break
+        end
+
+        -- Discard playoff games that leak through: if the game's week
+        -- (captured pre-game) is >= 17, the regular season was already over.
+        if stats.week >= REGULAR_SEASON_WEEKS then
+            print(string.format("Game %d: playoff game detected (week %d), discarding", game_count, stats.week + 1))
+            game_count = game_count - 1
             break
         end
 
