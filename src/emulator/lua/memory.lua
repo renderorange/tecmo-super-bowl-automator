@@ -49,6 +49,16 @@ local ADDR = {
 -- Writes require MMC3 enable: memory.writebyte(0xA001, 0x80)
 ------------------------------------------------------------------------
 local SRAM = {
+    -- In-game team stats (from sram_variables.asm)
+    P1_FIRST_DOWNS = 0x668E,
+    P2_FIRST_DOWNS = 0x668F,
+    P1_TEAM_RUSH_ATTEMPTS = 0x6690,
+    P2_TEAM_RUSH_ATTEMPTS = 0x6691,
+    P1_TEAM_RUSH_YARDS = 0x6692, -- 2 bytes little-endian
+    P2_TEAM_RUSH_YARDS = 0x6694, -- 2 bytes little-endian
+    P1_TEAM_PASS_YARDS = 0x6696, -- 2 bytes little-endian
+    P2_TEAM_PASS_YARDS = 0x6698, -- 2 bytes little-endian
+
     -- Team control types (28 bytes, one per team: 0=MAN,1=COA,2=COM,3=SKP)
     TEAM_TYPE_SEASON = 0x669B,
 
@@ -179,33 +189,33 @@ local P_STAT = {
 ------------------------------------------------------------------------
 local TEAM_NAMES = {
     [0x00] = "BUF",
-    [0x01] = "MIA",
-    [0x02] = "IND",
-    [0x03] = "NYJ",
-    [0x04] = "NE",
+    [0x01] = "IND",
+    [0x02] = "MIA",
+    [0x03] = "NEP",
+    [0x04] = "NYJ",
     [0x05] = "CIN",
     [0x06] = "CLE",
     [0x07] = "HOU",
     [0x08] = "PIT",
     [0x09] = "DEN",
-    [0x0A] = "KC",
+    [0x0A] = "KAN",
     [0x0B] = "RAI",
-    [0x0C] = "SD",
+    [0x0C] = "LAC",
     [0x0D] = "SEA",
-    [0x0E] = "DAL",
+    [0x0E] = "WAS",
     [0x0F] = "NYG",
     [0x10] = "PHI",
-    [0x11] = "PHX",
-    [0x12] = "WAS",
+    [0x11] = "PHO",
+    [0x12] = "DAL",
     [0x13] = "CHI",
     [0x14] = "DET",
     [0x15] = "GB",
     [0x16] = "MIN",
     [0x17] = "TB",
-    [0x18] = "ATL",
-    [0x19] = "NO",
-    [0x1A] = "RAMS",
-    [0x1B] = "SF",
+    [0x18] = "SF",
+    [0x19] = "LAR",
+    [0x1A] = "NO",
+    [0x1B] = "ATL",
 }
 
 ------------------------------------------------------------------------

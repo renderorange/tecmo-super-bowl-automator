@@ -198,6 +198,8 @@ local function readGameStats()
         local passing_attempts, passing_completions, passing_yards, passing_tds, interceptions_thrown = 0, 0, 0, 0, 0
         local receptions, receiving_yards, receiving_tds = 0, 0, 0
         local sacks, interceptions, interception_return_yards, interception_return_tds = 0, 0, 0, 0
+        local kick_return_attempts, kick_return_yards, kick_return_tds = 0, 0, 0
+        local punt_return_attempts, punt_return_yards, punt_return_tds = 0, 0, 0
 
         -- QBs
         for _, qb in ipairs({ p.qb1, p.qb2 }) do
@@ -220,6 +222,12 @@ local function readGameStats()
             receptions = receptions + sk.receptions
             receiving_yards = receiving_yards + sk.receiving_yards
             receiving_tds = receiving_tds + sk.receiving_tds
+            kick_return_attempts = kick_return_attempts + sk.kick_return_attempts
+            kick_return_yards = kick_return_yards + sk.kick_return_yards
+            kick_return_tds = kick_return_tds + sk.kick_return_tds
+            punt_return_attempts = punt_return_attempts + sk.punt_return_attempts
+            punt_return_yards = punt_return_yards + sk.punt_return_yards
+            punt_return_tds = punt_return_tds + sk.punt_return_tds
         end
 
         -- Defensive positions
@@ -243,12 +251,23 @@ local function readGameStats()
             receptions = receptions,
             receiving_yards = receiving_yards,
             receiving_tds = receiving_tds,
+            kick_return_attempts = kick_return_attempts,
+            kick_return_yards = kick_return_yards,
+            kick_return_tds = kick_return_tds,
+            punt_return_attempts = punt_return_attempts,
+            punt_return_yards = punt_return_yards,
+            punt_return_tds = punt_return_tds,
             sacks = sacks,
             interceptions = interceptions,
             interception_return_yards = interception_return_yards,
             interception_return_tds = interception_return_tds,
             k = p.k,
             punting = p.p,
+            first_downs = side == "p1" and memory.readbyte(SRAM.P1_FIRST_DOWNS) or memory.readbyte(SRAM.P2_FIRST_DOWNS),
+            in_game_rushing_attempts = side == "p1" and memory.readbyte(SRAM.P1_TEAM_RUSH_ATTEMPTS)
+                or memory.readbyte(SRAM.P2_TEAM_RUSH_ATTEMPTS),
+            in_game_rushing_yards = side == "p1" and mem.read16(SRAM.P1_TEAM_RUSH_YARDS) or mem.read16(SRAM.P2_TEAM_RUSH_YARDS),
+            in_game_passing_yards = side == "p1" and mem.read16(SRAM.P1_TEAM_PASS_YARDS) or mem.read16(SRAM.P2_TEAM_PASS_YARDS),
         }
     end
 
@@ -261,16 +280,8 @@ local function readGameStats()
         -- Total TDs from player stats
         local tracked_td = ts.rushing_tds + ts.receiving_tds + ts.interception_return_tds
         -- Add KR/PR TDs from skill players
-        local p = result[side .. "_players"]
-        local kick_return_tds, punt_return_tds = 0, 0
-        for _, key in ipairs({ "rb1", "rb2", "rb3", "rb4", "wr1", "wr2", "wr3", "wr4", "te1", "te2" }) do
-            kick_return_tds = kick_return_tds + p[key].kick_return_tds
-            punt_return_tds = punt_return_tds + p[key].punt_return_tds
-        end
-        local total_tracked_td = tracked_td + kick_return_tds + punt_return_tds
+        local total_tracked_td = tracked_td + ts.kick_return_tds + ts.punt_return_tds
         local tracked_pts = total_tracked_td * 6 + ts.k.xp_made + ts.k.fg_made * 3
-        ts.kick_return_tds = kick_return_tds
-        ts.punt_return_tds = punt_return_tds
         ts.total_td = total_tracked_td
         ts.tracked_pts = tracked_pts
         ts.untracked_pts = score - tracked_pts
@@ -349,12 +360,19 @@ local function runOneGame()
     local stats = nil
     local pregame_p1_record = nil
     local pregame_p2_record = nil
+    local pregame_week = nil
+    local pregame_game_in_week = nil
+    local saw_overtime = false
 
     for frame = 1, MAX_FRAMES_PER_GAME do
         local gs = memory.readbyte(ADDR.GAME_STATUS)
         local q = memory.readbyte(ADDR.QUARTER)
         local mins = memory.readbyte(ADDR.CLOCK_MINUTES)
         local my = memory.readbyte(ADDR.MENU_Y)
+
+        if q >= 4 then
+            saw_overtime = true
+        end
 
         -- Detect gameplay started (Q1 with clock running)
         if not gameplay_started and q == 0 and mins > 0 and mins <= 5 then
@@ -364,6 +382,8 @@ local function runOneGame()
             local p2_id = memory.readbyte(ADDR.P2_TEAM)
             pregame_p1_record = mem.readTeamRecord(p1_id)
             pregame_p2_record = mem.readTeamRecord(p2_id)
+            pregame_week = memory.readbyte(SRAM.CURRENT_WEEK)
+            pregame_game_in_week = memory.readbyte(SRAM.CURRENT_GAME)
         end
 
         -- Read stats once after gameplay, when we first see a post-game screen
@@ -372,6 +392,13 @@ local function runOneGame()
             stats = readGameStats()
             stats.p1_pregame_record = pregame_p1_record
             stats.p2_pregame_record = pregame_p2_record
+            stats.is_overtime = saw_overtime
+            if pregame_week ~= nil then
+                stats.week = pregame_week
+            end
+            if pregame_game_in_week ~= nil then
+                stats.game_in_week = pregame_game_in_week
+            end
             stats_read = true
         end
 

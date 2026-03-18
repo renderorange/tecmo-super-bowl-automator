@@ -163,7 +163,15 @@ export class SeasonRepository {
                     away_team_id: away_team_id,
                     home_score: home_score,
                     away_score: away_score,
-                    is_overtime: false, // Could be inferred from team_stats if needed
+                    is_overtime: !!game_data.is_overtime,
+                    home_first_downs: home_stats.first_downs || 0,
+                    away_first_downs: away_stats.first_downs || 0,
+                    home_in_game_rushing_attempts: home_stats.in_game_rushing_attempts || 0,
+                    away_in_game_rushing_attempts: away_stats.in_game_rushing_attempts || 0,
+                    home_in_game_rushing_yards: home_stats.in_game_rushing_yards || 0,
+                    away_in_game_rushing_yards: away_stats.in_game_rushing_yards || 0,
+                    home_in_game_passing_yards: home_stats.in_game_passing_yards || 0,
+                    away_in_game_passing_yards: away_stats.in_game_passing_yards || 0,
 
                     // Home team stats
                     home_rushing_attempts: home_stats.rushing_attempts || 0,
@@ -229,11 +237,15 @@ export class SeasonRepository {
                     home_pre_ties: home_pre.ties || 0,
                     home_pre_points_for: home_pre.points_for || 0,
                     home_pre_points_against: home_pre.points_against || 0,
+                    home_pre_pass_yards_allowed: home_pre.passing_yards_allowed || 0,
+                    home_pre_rush_yards_allowed: home_pre.rushing_yards_allowed || 0,
                     away_pre_wins: away_pre.wins || 0,
                     away_pre_losses: away_pre.losses || 0,
                     away_pre_ties: away_pre.ties || 0,
                     away_pre_points_for: away_pre.points_for || 0,
                     away_pre_points_against: away_pre.points_against || 0,
+                    away_pre_pass_yards_allowed: away_pre.passing_yards_allowed || 0,
+                    away_pre_rush_yards_allowed: away_pre.rushing_yards_allowed || 0,
                 })
                 .returning("id");
 
@@ -262,7 +274,11 @@ export class SeasonRepository {
     }
 
     get_cached_player_id(team_id, position_detail) {
-        return this.player_id_cache.get(`${team_id}:${position_detail}`) || null;
+        const key = `${team_id}:${position_detail}`;
+        if (!this.player_id_cache.has(key)) {
+            return null;
+        }
+        return this.player_id_cache.get(key);
     }
 
     /**
@@ -291,7 +307,7 @@ export class SeasonRepository {
 
             const player_id = this.get_cached_player_id(team_id, position_detail);
 
-            if (!player_id) {
+            if (player_id === null || player_id === undefined) {
                 console.warn(`Player not found for team ${team_id}, position ${position_detail}`);
                 continue;
             }

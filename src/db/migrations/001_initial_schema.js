@@ -93,6 +93,14 @@ export function up(knex) {
             table.integer("home_score");
             table.integer("away_score");
             table.boolean("is_overtime").defaultTo(false);
+            table.integer("home_first_downs").defaultTo(0);
+            table.integer("away_first_downs").defaultTo(0);
+            table.integer("home_in_game_rushing_attempts").defaultTo(0);
+            table.integer("away_in_game_rushing_attempts").defaultTo(0);
+            table.integer("home_in_game_rushing_yards").defaultTo(0);
+            table.integer("away_in_game_rushing_yards").defaultTo(0);
+            table.integer("home_in_game_passing_yards").defaultTo(0);
+            table.integer("away_in_game_passing_yards").defaultTo(0);
 
             // Home team stats
             table.integer("home_rushing_attempts").defaultTo(0);
@@ -158,11 +166,15 @@ export function up(knex) {
             table.integer("home_pre_ties").defaultTo(0);
             table.integer("home_pre_points_for").defaultTo(0);
             table.integer("home_pre_points_against").defaultTo(0);
+            table.integer("home_pre_pass_yards_allowed").defaultTo(0);
+            table.integer("home_pre_rush_yards_allowed").defaultTo(0);
             table.integer("away_pre_wins").defaultTo(0);
             table.integer("away_pre_losses").defaultTo(0);
             table.integer("away_pre_ties").defaultTo(0);
             table.integer("away_pre_points_for").defaultTo(0);
             table.integer("away_pre_points_against").defaultTo(0);
+            table.integer("away_pre_pass_yards_allowed").defaultTo(0);
+            table.integer("away_pre_rush_yards_allowed").defaultTo(0);
 
             table.index(["season_id", "week"]);
             table.index("home_team_id");
