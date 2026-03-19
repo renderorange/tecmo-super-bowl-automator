@@ -1,6 +1,6 @@
-# Tecmo Super Bowl Season Simulator
+# Tecmo Super Bowl Automator
 
-Automated season simulator for Tecmo Super Bowl (NES). Uses the nesl headless emulator with Lua scripting to run COM-vs-COM games using the actual game engine, extract per-player stats from SRAM, and store results in SQLite.
+Automated season runner for Tecmo Super Bowl (NES). Uses the nesl headless emulator with Lua scripting to run COM-vs-COM games using the actual game engine, extract per-player stats from SRAM, and store results in SQLite.
 
 ## Quick Start
 
