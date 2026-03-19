@@ -8,7 +8,7 @@
  *
  * Options:
  *   --output, -o   Output JSONL file (default: runs/season-{timestamp}.jsonl)
- *   --max-games    Max games to run (default: 238 = 14*17)
+ *   --max-games    Max games to run (default: 224 = 28 teams * 16 games / 2)
  *   --quiet, -q    Suppress per-game output
  *   --save-db, -d  Save results to database
  */
@@ -26,7 +26,7 @@ const projectRoot = path.resolve(__dirname, "..");
 
 const args = minimist(process.argv.slice(2), {
     alias: { o: "output", q: "quiet", d: "save-db" },
-    default: { "max-games": 238 },
+    default: { "max-games": 224 },
 });
 
 // Set up output file

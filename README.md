@@ -9,7 +9,7 @@ npm install
 npm run db:migrate       # Create database schema
 npm run extract-rom      # Extract team/player data from ROM
 npm run db:seed          # Seed database with ROM data
-npm test                 # Run tests (64 tests)
+npm test                 # Run tests (71 tests)
 npm run simulate         # Run one 17-week season
 npm run simulate:multi   # Run 10 seasons in parallel
 ```
@@ -69,7 +69,7 @@ Rushing, passing, receiving yards and TDs; sacks; interceptions; kick/punt retur
 ### Pre-game context
 
 - Pre-game W-L-T record, points_for, points_against, pass/rush yards allowed (from SRAM season standings)
-- Week and game-in-week index
+- Week and `game_in_week` index (0-based position within the week's schedule)
 - Overtime flag
 
 ### Game metadata (JSON-encoded)
@@ -118,7 +118,8 @@ scripts/
 tests/
   db/
     schema.test.js            Schema and seed data validation (28 tests)
-    season-repository.test.js Repository CRUD and aggregation (18 tests)
+    season-repository.test.js Repository CRUD and aggregation (22 tests)
+    pipeline.test.js          JSONL-to-database round-trip integration (3 tests)
   emulator/
     index.test.js             Emulator wrapper tests (18 tests)
 
@@ -133,16 +134,16 @@ runs/
 
 SQLite database at `data/stats.db`:
 
-| Table               | Rows           | Description                                                                    |
-| ------------------- | -------------- | ------------------------------------------------------------------------------ |
-| `teams`             | 28             | NFL teams (id, name, city, abbreviation, conference, division)                 |
-| `players`           | 840            | Players with all ROM attributes (14 ability fields, jersey, face, ROM offsets) |
-| `seasons`           | per run        | Season metadata (status, timestamps, game counts)                              |
-| `games`             | ~224/season    | Game results with 94 columns: scores, team stats, pre-game records, metadata   |
-| `player_game_stats` | ~11,200/season | Per-player per-game stat lines (32 columns including injury/condition)         |
-| `team_season_stats` | 28/season      | Aggregated W-L-T, points for/against, home/away splits                         |
-| `injuries`          | --             | Injury event tracking (reserved)                                               |
-| `season_crashes`    | rare           | Crash diagnostics for failed seasons                                           |
+| Table               | Rows          | Description                                                                    |
+| ------------------- | ------------- | ------------------------------------------------------------------------------ |
+| `teams`             | 28            | NFL teams (id, name, city, abbreviation, conference, division)                 |
+| `players`           | 840           | Players with all ROM attributes (14 ability fields, jersey, face, ROM offsets) |
+| `seasons`           | per run       | Season metadata (status, timestamps, game counts)                              |
+| `games`             | 224/season    | Game results with 95 columns: scores, team stats, pre-game records, metadata   |
+| `player_game_stats` | 11,200/season | Per-player per-game stat lines (32 columns including injury/condition)         |
+| `team_season_stats` | 28/season     | Aggregated W-L-T, points for/against, home/away splits                         |
+| `injuries`          | per season    | Injury event tracking (player transitions from healthy to injured)             |
+| `season_crashes`    | rare          | Crash diagnostics for failed seasons                                           |
 
 ### Player attributes (from ROM)
 

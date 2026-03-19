@@ -39,6 +39,9 @@ beforeAll(async () => {
     const migration = await import("../../src/db/migrations/001_initial_schema.js");
     await migration.up(db);
 
+    const migration2 = await import("../../src/db/migrations/002_add_game_in_week_fix_total_games.js");
+    await migration2.up(db);
+
     await db("teams").insert(TEST_TEAMS);
     await db("players").insert(TEST_PLAYERS);
 
@@ -62,6 +65,7 @@ beforeEach(async () => {
     await db("games").del();
     await db("team_season_stats").del();
     await db("seasons").del();
+    repository.injury_state_cache.clear();
 });
 
 describe("SeasonRepository.create_season", () => {
@@ -74,7 +78,7 @@ describe("SeasonRepository.create_season", () => {
         const season = await db("seasons").where("id", season_id).first();
         expect(season).toBeDefined();
         expect(season.status).toBe("running");
-        expect(season.total_games).toBe(238);
+        expect(season.total_games).toBe(224);
     });
 
     test("creates a season with custom total games", async () => {
@@ -137,6 +141,7 @@ describe("SeasonRepository.save_game", () => {
         expect(game.away_team_id).toBe(1);
         expect(game.home_score).toBe(21);
         expect(game.away_score).toBe(14);
+        expect(game.game_in_week).toBe(0);
     });
 
     test("saves player stats for QB", async () => {
@@ -501,5 +506,87 @@ describe("POSITION_KEY_MAP", () => {
         expect(POSITION_KEY_MAP.ss).toBe("SS");
         expect(POSITION_KEY_MAP.k).toBe("K");
         expect(POSITION_KEY_MAP.p).toBe("P");
+    });
+});
+
+describe("SeasonRepository injury detection", () => {
+    const make_game_data = (week, team_id, injury_detail) => ({
+        p1_team_id: team_id,
+        p2_team_id: team_id === 0 ? 1 : 0,
+        p1_score: 14,
+        p2_score: 7,
+        week: week,
+        game_in_week: 0,
+        p1_players: {
+            qb1: {
+                passing_attempts: 10,
+                passing_completions: 5,
+                passing_yards: 80,
+                passing_tds: 1,
+                interceptions_thrown: 0,
+                rushing_attempts: 1,
+                rushing_yards: 3,
+                rushing_tds: 0,
+            },
+        },
+        p2_players: {},
+        p1_injury_detail: injury_detail,
+        p2_injury_detail: {},
+    });
+
+    test("detects new injury when player transitions from healthy to injured", async () => {
+        const season_id = await repository.create_season();
+
+        // Game 1: QB1 healthy
+        await repository.save_game(season_id, make_game_data(0, 0, { qb1: 0 }));
+
+        // Game 2: QB1 doubtful
+        await repository.save_game(season_id, make_game_data(1, 0, { qb1: 3 }));
+
+        const injuries = await db("injuries").where({ season_id });
+        expect(injuries).toHaveLength(1);
+        expect(injuries[0].player_id).toBe(1); // BUF QB1
+        expect(injuries[0].week_injured).toBe(2); // week 1 (0-based) + 1 = 2
+    });
+
+    test("does not create duplicate injury for already-injured player", async () => {
+        const season_id = await repository.create_season();
+
+        // Game 1: QB1 questionable (first appearance already injured)
+        await repository.save_game(season_id, make_game_data(0, 0, { qb1: 2 }));
+
+        // Game 2: QB1 still injured (doubtful)
+        await repository.save_game(season_id, make_game_data(1, 0, { qb1: 3 }));
+
+        const injuries = await db("injuries").where({ season_id });
+        expect(injuries).toHaveLength(1); // Only from game 1 (default 0 -> 2)
+    });
+
+    test("creates new injury record when player recovers then re-injured", async () => {
+        const season_id = await repository.create_season();
+
+        // Game 1: QB1 questionable (new injury: default 0 -> 2)
+        await repository.save_game(season_id, make_game_data(0, 0, { qb1: 2 }));
+
+        // Game 2: QB1 recovered
+        await repository.save_game(season_id, make_game_data(1, 0, { qb1: 0 }));
+
+        // Game 3: QB1 re-injured (doubtful, new injury: 0 -> 3)
+        await repository.save_game(season_id, make_game_data(2, 0, { qb1: 3 }));
+
+        const injuries = await db("injuries").where({ season_id }).orderBy("week_injured");
+        expect(injuries).toHaveLength(2);
+        expect(injuries[0].week_injured).toBe(1); // week 0 + 1
+        expect(injuries[1].week_injured).toBe(3); // week 2 + 1
+    });
+
+    test("does not create injury record for healthy players", async () => {
+        const season_id = await repository.create_season();
+
+        // Game 1: QB1 healthy
+        await repository.save_game(season_id, make_game_data(0, 0, { qb1: 0 }));
+
+        const injuries = await db("injuries").where({ season_id });
+        expect(injuries).toHaveLength(0);
     });
 });

@@ -17,7 +17,7 @@ local SRAM = mem.SRAM
 -- Configuration
 ------------------------------------------------------------------------
 local OUTPUT_FILE = os.getenv("TSB_OUTPUT") or "/tmp/tsb-results.jsonl"
-local MAX_GAMES = tonumber(os.getenv("TSB_MAX_GAMES")) or 238 -- 14 games/wk * 17 weeks
+local MAX_GAMES = tonumber(os.getenv("TSB_MAX_GAMES")) or 224 -- 28 teams * 16 games / 2 (bye weeks reduce from 238)
 local MAX_FRAMES_PER_GAME = 300000 -- ~83 min at 60fps safety limit
 local REGULAR_SEASON_WEEKS = 17 -- TSB 17-week regular season (weeks 0-16)
 

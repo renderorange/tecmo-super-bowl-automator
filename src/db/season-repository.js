@@ -55,15 +55,16 @@ export class SeasonRepository {
         this.db = options.db || db;
         this.player_id_cache = new Map();
         this.player_cache_loaded_teams = new Set();
+        this.injury_state_cache = new Map(); // Map<"seasonId:playerId", last_injury_status>
     }
 
     /**
      * Create a new season record.
      *
-     * @param {number} totalGames - Expected total games (default: 238)
+     * @param {number} totalGames - Expected total games (default: 224)
      * @returns {Promise<number>} The season ID
      */
-    async create_season(total_games = 238) {
+    async create_season(total_games = 224) {
         const [season_id] = await this.db("seasons")
             .insert({
                 total_games: total_games,
@@ -165,6 +166,7 @@ export class SeasonRepository {
                 .insert({
                     season_id: season_id,
                     week: game_data.week + 1, // Convert 0-based to 1-based
+                    game_in_week: game_data.game_in_week !== undefined ? game_data.game_in_week : null,
                     home_team_id: home_team_id,
                     away_team_id: away_team_id,
                     home_score: home_score,
@@ -287,6 +289,11 @@ export class SeasonRepository {
                 game_data.p2_conditions || {},
             );
 
+            // Detect and record new injuries
+            const week_1based = game_data.week + 1;
+            await this.detect_and_save_injuries(season_id, game_id_val, week_1based, home_team_id, game_data.p1_injury_detail, trx);
+            await this.detect_and_save_injuries(season_id, game_id_val, week_1based, away_team_id, game_data.p2_injury_detail, trx);
+
             return game_id_val;
         });
     }
@@ -363,6 +370,52 @@ export class SeasonRepository {
 
         if (player_stats.length > 0) {
             await trx("player_game_stats").insert(player_stats);
+        }
+    }
+
+    /**
+     * Detect new injuries by comparing current injury status to the
+     * player's last known status cached in memory.  When a player
+     * transitions from healthy (0) to injured (>0) a row is inserted
+     * into the injuries table.
+     *
+     * @param {number} season_id
+     * @param {number} game_id
+     * @param {number} week - 1-based week number
+     * @param {number} team_id
+     * @param {object} injuries_raw - Injury detail by position key (e.g., {qb1: 0, rb1: 3})
+     * @param {object} trx - Knex transaction
+     * @returns {Promise<void>}
+     */
+    async detect_and_save_injuries(season_id, game_id, week, team_id, injuries_raw, trx) {
+        if (!injuries_raw || Object.keys(injuries_raw).length === 0) {
+            return;
+        }
+
+        for (const [position_key, injury_status] of Object.entries(injuries_raw)) {
+            const position_detail = POSITION_KEY_MAP[position_key];
+            if (!position_detail) {
+                continue;
+            }
+
+            const player_id = this.get_cached_player_id(team_id, position_detail);
+            if (player_id === null || player_id === undefined) {
+                continue;
+            }
+
+            const cache_key = `${season_id}:${player_id}`;
+            const prev_status = this.injury_state_cache.get(cache_key) || 0;
+
+            if (injury_status > 0 && prev_status === 0) {
+                await trx("injuries").insert({
+                    season_id,
+                    game_id,
+                    player_id,
+                    week_injured: week,
+                });
+            }
+
+            this.injury_state_cache.set(cache_key, injury_status);
         }
     }
 
