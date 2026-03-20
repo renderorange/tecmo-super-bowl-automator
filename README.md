@@ -12,6 +12,7 @@ npm run db:seed          # Seed database with ROM data
 npm test                 # Run tests (71 tests)
 npm run simulate         # Run one 17-week season
 npm run simulate:multi   # Run 10 seasons in parallel
+npm run db:backup        # Backup database with timestamp
 ```
 
 ## Running Seasons
