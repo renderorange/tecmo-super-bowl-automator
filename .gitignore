@@ -17,6 +17,7 @@ build/
 
 # Database
 data/stats.*
+data/backup/stats.*
 runs/
 
 # Environment

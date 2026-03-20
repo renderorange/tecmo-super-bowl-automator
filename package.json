@@ -22,6 +22,7 @@
         "db:migrate": "knex migrate:latest",
         "db:rollback": "knex migrate:rollback",
         "db:seed": "node scripts/seed.js",
+        "db:backup": "cp -a data/stats.db data/backup/stats.db.$(date +\"%m%d%Y%S\")",
         "extract-rom": "node scripts/extract-rom-data.js"
     },
     "dependencies": {
