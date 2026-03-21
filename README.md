@@ -6,13 +6,14 @@ Automated season runner for Tecmo Super Bowl (NES). Uses the nesl headless emula
 
 ```bash
 npm install
-npm run db:migrate       # Create database schema
-npm run extract-rom      # Extract team/player data from ROM
-npm run db:seed          # Seed database with ROM data
-npm test                 # Run tests (71 tests)
-npm run simulate         # Run one 17-week season
-npm run simulate:multi   # Run 10 seasons in parallel
-npm run db:backup        # Backup database with timestamp
+npm run db:migrate                # Create database schema
+npm run extract-rom               # Extract team/player data from ROM
+npm run db:seed                   # Seed database with ROM data
+npm test                          # Run tests (71 tests)
+npm run simulate                  # Run one 17-week season
+npm run simulate:multi            # Run 10 seasons in parallel
+npm run db:backup                 # Backup database with timestamp
+npm run db:refresh-injury-stats   # Manually refresh player_injury_stats table
 ```
 
 ## Running Seasons
@@ -87,13 +88,6 @@ Rushing, passing, receiving yards and TDs; sacks; interceptions; kick/punt retur
 - **Fumbles**: Not tracked as a per-player stat. Fumble recovery TDs appear as `untracked_pts`.
 - **OL stats**: Offensive linemen have ROM attributes but no in-game stat tracking.
 
-## Performance
-
-- ~8 seconds wall-clock per game (~140x real-time)
-- ~2 minutes per week (14 games)
-- ~31 minutes per full season (224 games)
-- Parallel seasons scale linearly with CPU cores
-
 ## Project Structure
 
 ```
@@ -115,6 +109,7 @@ scripts/
   run-season.js           Run one 17-week season (--save-db for database persistence)
   run-multi-season.js     Run N seasons in parallel (--seasons N --concurrency C)
   test-emulator.js        Integration test (runs 1 game)
+  refresh-injury-stats.js Manually refresh player_injury_stats materialized table
 
 tests/
   db/
@@ -135,16 +130,48 @@ runs/
 
 SQLite database at `data/stats.db`:
 
-| Table               | Rows          | Description                                                                    |
-| ------------------- | ------------- | ------------------------------------------------------------------------------ |
-| `teams`             | 28            | NFL teams (id, name, city, abbreviation, conference, division)                 |
-| `players`           | 840           | Players with all ROM attributes (14 ability fields, jersey, face, ROM offsets) |
-| `seasons`           | per run       | Season metadata (status, timestamps, game counts)                              |
-| `games`             | 224/season    | Game results with 95 columns: scores, team stats, pre-game records, metadata   |
-| `player_game_stats` | 11,200/season | Per-player per-game stat lines (32 columns including injury/condition)         |
-| `team_season_stats` | 28/season     | Aggregated W-L-T, points for/against, home/away splits                         |
-| `injuries`          | per season    | Injury event tracking (player transitions from healthy to injured)             |
-| `season_crashes`    | rare          | Crash diagnostics for failed seasons                                           |
+| Table                 | Rows          | Description                                                                               |
+| --------------------- | ------------- | ----------------------------------------------------------------------------------------- |
+| `teams`               | 28            | NFL teams (id, name, city, abbreviation, conference, division)                            |
+| `players`             | 840           | Players with all ROM attributes (14 ability fields, jersey, face, ROM offsets)            |
+| `seasons`             | per run       | Season metadata (status, timestamps, game counts)                                         |
+| `games`               | 224/season    | Game results with 95 columns: scores, team stats, pre-game records, metadata              |
+| `player_game_stats`   | 11,200/season | Per-player per-game stat lines (32 columns including injury/condition)                    |
+| `team_season_stats`   | 28/season     | Aggregated W-L-T, points for/against, home/away splits                                    |
+| `injuries`            | per season    | Injury event tracking (player transitions from healthy to injured)                        |
+| `player_injury_stats` | 840           | **Materialized table**: Pre-aggregated injury statistics per player for query performance |
+| `season_crashes`      | rare          | Crash diagnostics for failed seasons                                                      |
+
+### player_injury_stats (Materialized Table)
+
+This table pre-computes injury statistics to optimize query performance in downstream applications (e.g., [tecmo-super-bowl-explorer](https://github.com/renderorange/tecmo-super-bowl-explorer)).
+
+**Columns:**
+
+- `player_id` (PRIMARY KEY)
+- `player_name`, `team_id`, `team_name`, `position`
+- `total_injuries` - Total injury events across all seasons
+- `total_games_played` - Count of games with stats recorded
+- `injury_rate` - Injuries per game played (FLOAT)
+
+**Automatic Refresh:**
+The table is automatically refreshed when running:
+
+- `npm run simulate` (after season completion)
+- `npm run simulate:multi` (after each season completion)
+
+**Manual Refresh:**
+If you manually import data or need to rebuild the table:
+
+```bash
+npm run db:refresh-injury-stats
+```
+
+**Performance Impact:**
+
+- Query optimization for injury-prone/immune player lookups
+- Reduces complex queries from ~5-6 seconds to <100ms
+- Eliminates repeated joins across 800K+ player_game_stats rows
 
 ### Player attributes (from ROM)
 
@@ -268,6 +295,10 @@ Button names: uppercase `A`, `B`; lowercase `start`, `select`, `up`, `down`, `le
 
 - **[bruddog's Tecmo Super Bowl NES Disassembly](https://github.com/bruddog/Tecmo_Super_Bowl_NES_Disassembly)** -- Complete 6502 disassembly with annotated SRAM layouts, stat indexes, and simulation engine
 - **[Tecmo Geek](https://tecmogeek.com/)** -- Player attribute validation (839/840 exact match with ROM extraction)
+
+## Companion Application
+
+The data from this project can be queried and observed through the companion application, [tecmo-super-bowl-explorer](https://github.com/renderorange/tecmo-super-bowl-explorer).
 
 ## Requirements
 
