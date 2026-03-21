@@ -31,13 +31,13 @@ export async function up(knex) {
     `);
 
     // Create indexes for common query patterns
-    await knex.raw("CREATE INDEX IF NOT EXISTS idx_pis_injuries ON player_injury_stats(total_injuries DESC)");
-    await knex.raw("CREATE INDEX IF NOT EXISTS idx_pis_games ON player_injury_stats(total_games_played DESC)");
-    await knex.raw("CREATE INDEX IF NOT EXISTS idx_pis_position ON player_injury_stats(position)");
-    await knex.raw("CREATE INDEX IF NOT EXISTS idx_pis_rate ON player_injury_stats(injury_rate DESC)");
+    await knex.raw("CREATE INDEX IF NOT EXISTS pis_injuries_index ON player_injury_stats(total_injuries DESC)");
+    await knex.raw("CREATE INDEX IF NOT EXISTS pis_games_index ON player_injury_stats(total_games_played DESC)");
+    await knex.raw("CREATE INDEX IF NOT EXISTS pis_position_index ON player_injury_stats(position)");
+    await knex.raw("CREATE INDEX IF NOT EXISTS pis_rate_index ON player_injury_stats(injury_rate DESC)");
 
     // Add composite index to player_game_stats for better COUNT(DISTINCT game_id) performance
-    await knex.raw("CREATE INDEX IF NOT EXISTS idx_pgs_player_game ON player_game_stats(player_id, game_id)");
+    await knex.raw("CREATE INDEX IF NOT EXISTS pgs_player_game_index ON player_game_stats(player_id, game_id)");
 
     // Populate the table with initial data
     await knex.raw(`
@@ -60,10 +60,10 @@ export async function up(knex) {
 }
 
 export async function down(knex) {
-    await knex.raw("DROP INDEX IF EXISTS idx_pis_injuries");
-    await knex.raw("DROP INDEX IF EXISTS idx_pis_games");
-    await knex.raw("DROP INDEX IF EXISTS idx_pis_position");
-    await knex.raw("DROP INDEX IF EXISTS idx_pis_rate");
-    await knex.raw("DROP INDEX IF EXISTS idx_pgs_player_game");
+    await knex.raw("DROP INDEX IF EXISTS pis_injuries_index");
+    await knex.raw("DROP INDEX IF EXISTS pis_games_index");
+    await knex.raw("DROP INDEX IF EXISTS pis_position_index");
+    await knex.raw("DROP INDEX IF EXISTS pis_rate_index");
+    await knex.raw("DROP INDEX IF EXISTS pgs_player_game_index");
     await knex.raw("DROP TABLE IF EXISTS player_injury_stats");
 }

@@ -273,8 +273,8 @@ cmake .. -DCMAKE_BUILD_TYPE=Release
 make -j$(nproc)
 
 # Add to PATH or set NESL_PATH:
-export PATH="~/src/nesl/build:$PATH"
-# or: export NESL_PATH="~/src/nesl/build/nesl"
+export PATH="$HOME/src/nesl/build:$PATH"
+# or: export NESL_PATH="$HOME/src/nesl/build/nesl"
 ```
 
 ### Lua API
