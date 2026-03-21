@@ -143,6 +143,8 @@ try {
     if (repository && seasonId) {
         console.log("\nUpdating team season stats...");
         await repository.update_team_season_stats(seasonId);
+        console.log("Refreshing player injury stats...");
+        await repository.refresh_player_injury_stats();
         await repository.complete_season(seasonId, gameCount);
         console.log(`Season ${seasonId} saved to database`);
     }

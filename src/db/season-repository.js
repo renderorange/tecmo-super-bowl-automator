@@ -608,6 +608,33 @@ export class SeasonRepository {
     }
 
     /**
+     * Refresh the player_injury_stats materialized table.
+     * This should be called after completing a season to update
+     * pre-aggregated injury statistics for faster queries.
+     *
+     * @returns {Promise<void>}
+     */
+    async refresh_player_injury_stats() {
+        await this.db.raw(`
+            INSERT OR REPLACE INTO player_injury_stats
+            SELECT
+                p.id as player_id,
+                p.name as player_name,
+                p.team_id,
+                t.name as team_name,
+                p.position,
+                COUNT(DISTINCT i.id) as total_injuries,
+                COUNT(DISTINCT pgs.game_id) as total_games_played,
+                ROUND(CAST(COUNT(DISTINCT i.id) AS FLOAT) / NULLIF(COUNT(DISTINCT pgs.game_id), 0), 4) as injury_rate
+            FROM players p
+            JOIN teams t ON t.id = p.team_id
+            JOIN player_game_stats pgs ON pgs.player_id = p.id
+            LEFT JOIN injuries i ON i.player_id = p.id
+            GROUP BY p.id, p.name, p.team_id, t.name, p.position
+        `);
+    }
+
+    /**
      * Get season summary with team standings.
      *
      * @param {number} season_id
