@@ -1,0 +1,24 @@
+name: CI
+
+on:
+    push:
+        branches: [main]
+    pull_request:
+        branches: [main]
+
+jobs:
+    ci:
+        runs-on: ubuntu-latest
+        steps:
+            - uses: actions/checkout@v4
+            - uses: actions/setup-node@v4
+              with:
+                  node-version: lts/*
+            - run: sudo apt update && sudo apt install -y luarocks
+            - run: luarocks install luacheck --local
+            - run: npm ci
+            - run: npm run db:migrate
+            - run: npm run db:seed
+            - run: npm run lint:all
+            - run: npm run format:all:check
+            - run: npm test
