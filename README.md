@@ -33,6 +33,10 @@ node scripts/run-season.js --save-db --quiet
 
 # Run the Lua controller directly (requires nesl in PATH)
 nesl src/emulator/lua/controller.lua ~/roms/nes/Tecmo\ Super\ Bowl\ \(USA\).nes
+
+# Loop over multiple seasons in parallel (creates backup between steps and exits on failure)
+bash scripts/run-sim-sequences.sh    # 10 loops by default
+bash scripts/run-sim-sequences.sh 5  # specify less or more
 ```
 
 Output is JSONL (one JSON object per game) written to `runs/season-{timestamp}.jsonl`.
