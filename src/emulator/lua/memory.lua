@@ -3,6 +3,8 @@
 -- - https://github.com/bruddog/Tecmo_Super_Bowl_NES_Disassembly
 --   (zero_page_variables.asm, ram_variables.asm, sram_variables.asm, stat_indexes.asm)
 
+local bit = require("bit")
+
 ------------------------------------------------------------------------
 -- RAM addresses (zero-page and general)
 ------------------------------------------------------------------------
