@@ -13,7 +13,7 @@ export default {
     pool: {
         afterCreate: (conn, cb) => {
             conn.pragma("journal_mode = WAL");
-            conn.pragma("busy_timeout = 10000");
+            conn.pragma("busy_timeout = 30000");
             cb(null, conn);
         },
     },

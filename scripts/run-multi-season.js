@@ -4,8 +4,9 @@
  * Run multiple Tecmo Super Bowl seasons in parallel.
  *
  * Spawns N concurrent run-season.js child processes, each running
- * an independent full season. Results are saved to the database
- * and individual JSONL files.
+ * an independent full season. Child processes write JSONL only;
+ * the parent process handles all database writes sequentially
+ * to prevent "database is locked" errors.
  *
  * Usage:
  *   node scripts/run-multi-season.js [options]
@@ -15,6 +16,7 @@
  *   --concurrency, -c  Max concurrent seasons (default: CPU cores - 1, min 1)
  *   --quiet, -q      Suppress per-game output from child processes
  *   --no-db          Skip database persistence (JSONL only)
+ *   --skip-import   Skip database import (useful for just running sims)
  */
 
 import { spawn } from "child_process";
@@ -22,6 +24,7 @@ import os from "os";
 import path from "path";
 import minimist from "minimist";
 import { fileURLToPath } from "url";
+import { acquire_lock, release_lock, import_all_seasons } from "./db-writer.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const PROJECT_ROOT = path.resolve(__dirname, "..");
@@ -33,23 +36,24 @@ const args = minimist(process.argv.slice(2), {
         seasons: 10,
         concurrency: Math.max(1, os.cpus().length - 1),
     },
-    boolean: ["quiet", "no-db"],
+    boolean: ["quiet", "no-db", "skip-import"],
 });
 
 const total_seasons = parseInt(args.seasons, 10);
 const max_concurrency = parseInt(args.concurrency, 10);
 const quiet = args.quiet || false;
-const save_db = !args["no-db"];
+const skip_import = args["skip-import"] || false;
 
 console.log("Tecmo Super Bowl Multi-Season Runner");
 console.log("=====================================");
 console.log(`Seasons:     ${total_seasons}`);
 console.log(`Concurrency: ${max_concurrency}`);
-console.log(`Database:    ${save_db ? "Enabled" : "Disabled"}`);
+console.log(`Database:    ${!skip_import ? "Enabled" : "Disabled"}`);
 console.log(`Quiet:       ${quiet}`);
 console.log();
 
 const results = [];
+const jsonl_files = [];
 let completed = 0;
 let failed = 0;
 let running = 0;
@@ -68,9 +72,7 @@ function run_season(season_number) {
         if (quiet) {
             child_args.push("--quiet");
         }
-        if (save_db) {
-            child_args.push("--save-db");
-        }
+        child_args.push("--no-db");
 
         const child = spawn("node", [RUN_SEASON_SCRIPT, ...child_args], {
             cwd: PROJECT_ROOT,
@@ -104,15 +106,18 @@ function run_season(season_number) {
 
             if (code === 0) {
                 completed++;
-                // Extract season ID from stdout if available
-                const season_id_match = stdout_buffer.match(/Created season record: (\d+)/);
                 const games_match = stdout_buffer.match(/Season complete: (\d+) games/);
-                result.season_id = season_id_match ? parseInt(season_id_match[1], 10) : null;
                 result.games_completed = games_match ? parseInt(games_match[1], 10) : null;
+
+                const output_match = stdout_buffer.match(/Results: (.+\.jsonl)/);
+                if (output_match) {
+                    result.jsonl_file = output_match[1];
+                    jsonl_files.push(result.jsonl_file);
+                }
 
                 console.log(
                     `[${elapsed}s] Season ${season_number}/${total_seasons} completed` +
-                        `${result.season_id ? ` (id: ${result.season_id})` : ""}` +
+                        `${result.jsonl_file ? ` (${path.basename(result.jsonl_file)})` : ""}` +
                         `${result.games_completed ? ` -- ${result.games_completed} games` : ""}` +
                         ` [${completed} done, ${failed} failed, ${running - 1} running]`,
                 );
@@ -164,7 +169,6 @@ async function run_all() {
         const promise = run_season(season_num).then((result) => {
             running--;
             results.push(result);
-            // Start another if there are more queued
             const next = start_next();
             return next || result;
         });
@@ -172,7 +176,6 @@ async function run_all() {
         return promise;
     }
 
-    // Seed the initial batch
     const initial_batch = Math.min(max_concurrency, total_seasons);
     for (let i = 0; i < initial_batch; i++) {
         const promise = start_next();
@@ -181,10 +184,8 @@ async function run_all() {
         }
     }
 
-    // Wait for all to complete
     await Promise.all(pending);
 
-    // Print summary
     const total_elapsed = ((Date.now() - start_time) / 1000).toFixed(1);
     const successful = results.filter((r) => r.success);
     const failures = results.filter((r) => !r.success);
@@ -201,11 +202,6 @@ async function run_all() {
         const total_games = successful.reduce((sum, r) => sum + (r.games_completed || 0), 0);
         const avg_games = (total_games / successful.length).toFixed(0);
         console.log(`Games:     ${total_games} total (avg ${avg_games}/season)`);
-
-        const season_ids = successful.filter((r) => r.season_id).map((r) => r.season_id);
-        if (season_ids.length > 0) {
-            console.log(`Season IDs: ${season_ids.join(", ")}`);
-        }
     }
 
     if (failures.length > 0) {
@@ -216,10 +212,40 @@ async function run_all() {
         }
     }
 
+    if (!skip_import && jsonl_files.length > 0) {
+        console.log("\n=====================================");
+        console.log("Importing seasons to database");
+        console.log("=====================================");
+
+        try {
+            acquire_lock();
+            console.log("Acquired database lock");
+
+            const imported = await import_all_seasons(jsonl_files);
+
+            console.log("\nImport results:");
+            let imported_count = 0;
+            for (const imp of imported) {
+                if (imp.success) {
+                    console.log(`  ${path.basename(imp.file)} -> season ${imp.season_id} (${imp.games_saved} games)`);
+                    imported_count++;
+                } else {
+                    console.error(`  ${path.basename(imp.file)} -> FAILED: ${imp.error}`);
+                }
+            }
+            console.log(`\nImported ${imported_count}/${jsonl_files.length} seasons to database`);
+        } catch (err) {
+            console.error(`Import failed: ${err.message}`);
+            process.exit(1);
+        } finally {
+            release_lock();
+            console.log("Released database lock");
+        }
+    }
+
     const avg_per_season = successful.length > 0 ? (parseFloat(total_elapsed) / successful.length).toFixed(1) : "N/A";
     console.log(`\nAvg time per season: ${avg_per_season}s (wall-clock / completed)`);
 
-    // Exit with error if any failed
     if (failures.length > 0) {
         process.exit(1);
     }

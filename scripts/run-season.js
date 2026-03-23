@@ -147,13 +147,16 @@ try {
         await repository.refresh_player_injury_stats();
         await repository.complete_season(seasonId, gameCount);
         console.log(`Season ${seasonId} saved to database`);
+
+        console.log(`Cleaning up ${outputFile}...`);
+        fs.unlinkSync(outputFile);
+        console.log("JSONL file removed");
     }
 
     const elapsed = ((Date.now() - startTime) / 1000).toFixed(1);
 
     console.log("\n==================================");
     console.log(`Season complete: ${gameCount} games in ${elapsed}s`);
-    console.log(`Results: ${outputFile}`);
 
     // Print standings
     if (Object.keys(teamRecords).length > 0) {

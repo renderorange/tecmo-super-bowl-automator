@@ -18,6 +18,7 @@ build/
 # Database
 data/stats.*
 data/backup/stats.*
+data/.db.lock
 runs/
 
 # Environment
