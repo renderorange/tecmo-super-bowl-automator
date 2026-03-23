@@ -270,10 +270,8 @@ Conditions update with ~25% probability per quarter, biased toward regression to
 ```bash
 sudo apt-get install cmake build-essential
 
-# original source, https://github.com/threecreepio/nesl.git
-# is currently broken until PR is merged.
 cd ~/src
-git clone https://github.com/renderorange/nesl.git --branch add-unistd-for-linux
+git clone https://github.com/threecreepio/nesl.git
 cd nesl && mkdir build && cd build
 cmake .. -DCMAKE_BUILD_TYPE=Release
 make -j$(nproc)
