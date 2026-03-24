@@ -157,6 +157,7 @@ try {
 
     console.log("\n==================================");
     console.log(`Season complete: ${gameCount} games in ${elapsed}s`);
+    console.log(`Results: ${outputFile}`);
 
     // Print standings
     if (Object.keys(teamRecords).length > 0) {

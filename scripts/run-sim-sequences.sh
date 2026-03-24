@@ -6,9 +6,9 @@ SEQUENCES=${1:-10}
 
 echo "Running ${SEQUENCES} simulation sequences (stopping on failure)"
 echo "============================================================="
-echo ""
 
 for i in $(seq 1 "$SEQUENCES"); do
+    echo ""
     echo "### sequence $i"
     echo "## creating backup"
     npm run db:backup

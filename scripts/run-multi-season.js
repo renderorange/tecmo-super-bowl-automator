@@ -25,6 +25,7 @@ import path from "path";
 import minimist from "minimist";
 import { fileURLToPath } from "url";
 import { acquire_lock, release_lock, import_all_seasons } from "./db-writer.js";
+import db from "../src/db/index.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const PROJECT_ROOT = path.resolve(__dirname, "..");
@@ -72,7 +73,6 @@ function run_season(season_number) {
         if (quiet) {
             child_args.push("--quiet");
         }
-        child_args.push("--no-db");
 
         const child = spawn("node", [RUN_SEASON_SCRIPT, ...child_args], {
             cwd: PROJECT_ROOT,
@@ -155,7 +155,7 @@ function run_season(season_number) {
  * Run all seasons with concurrency throttling.
  */
 async function run_all() {
-    const pending = [];
+    const pending = new Set();
 
     function start_next() {
         if (next_season >= total_seasons) {
@@ -180,7 +180,7 @@ async function run_all() {
     for (let i = 0; i < initial_batch; i++) {
         const promise = start_next();
         if (promise) {
-            pending.push(promise);
+            pending.add(promise);
         }
     }
 
@@ -218,7 +218,7 @@ async function run_all() {
         console.log("=====================================");
 
         try {
-            acquire_lock();
+            await acquire_lock();
             console.log("Acquired database lock");
 
             const imported = await import_all_seasons(jsonl_files);
@@ -236,7 +236,7 @@ async function run_all() {
             console.log(`\nImported ${imported_count}/${jsonl_files.length} seasons to database`);
         } catch (err) {
             console.error(`Import failed: ${err.message}`);
-            process.exit(1);
+            process.exitCode = 1;
         } finally {
             release_lock();
             console.log("Released database lock");
@@ -247,11 +247,17 @@ async function run_all() {
     console.log(`\nAvg time per season: ${avg_per_season}s (wall-clock / completed)`);
 
     if (failures.length > 0) {
-        process.exit(1);
+        process.exitCode = 1;
     }
 }
 
-run_all().catch((err) => {
-    console.error(`Fatal error: ${err.message}`);
-    process.exit(2);
-});
+run_all()
+    .catch((err) => {
+        console.error(`Fatal error: ${err.message}`);
+        process.exitCode = 2;
+    })
+    .finally(async () => {
+        if (db && db.destroy) {
+            await db.destroy();
+        }
+    });
