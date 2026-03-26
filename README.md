@@ -13,7 +13,7 @@ npm test                          # Run tests (71 tests)
 npm run simulate                  # Run one 17-week season
 npm run simulate:multi            # Run 10 seasons in parallel
 npm run db:backup                 # Backup database with timestamp
-npm run db:refresh-injury-stats   # Manually refresh player_injury_stats table
+npm run db:post-import-aggregation # Refresh materialized tables after manual imports
 ```
 
 ## Running Seasons
@@ -108,12 +108,12 @@ src/
       controller.lua      Season simulation: menu navigation, game loop, stat extraction
 
 scripts/
-  extract-rom-data.js     Extract names + abilities from ROM binary
-  seed.js                 Load ROM data into database
-  run-season.js           Run one 17-week season (--save-db for database persistence)
-  run-multi-season.js     Run N seasons in parallel (--seasons N --concurrency C)
-  test-emulator.js        Integration test (runs 1 game)
-  refresh-injury-stats.js Manually refresh player_injury_stats materialized table
+  extract-rom-data.js         Extract names + abilities from ROM binary
+  seed.js                     Load ROM data into database
+  run-season.js               Run one 17-week season (--save-db for database persistence)
+  run-multi-season.js         Run N seasons in parallel (--seasons N --concurrency C)
+  test-emulator.js            Integration test (runs 1 game)
+  post-import-aggregation.js  Refresh materialized tables after manual data imports
 
 tests/
   db/
@@ -124,10 +124,10 @@ tests/
     index.test.js             Emulator wrapper tests (18 tests)
 
 data/
-  stats.db                SQLite database (created by migrations + seed)
+  stats.db                   SQLite database (created by migrations + seed)
 
 runs/
-  season-*.jsonl          Raw JSONL output from season runs
+  season-*.jsonl             Raw JSONL output from season runs
 ```
 
 ## Database Schema
@@ -165,11 +165,13 @@ The table is automatically refreshed when running:
 - `npm run simulate:multi` (after each season completion)
 
 **Manual Refresh:**
-If you manually import data or need to rebuild the table:
+If you manually import data, run post-import aggregation afterward:
 
 ```bash
-npm run db:refresh-injury-stats
+npm run db:post-import-aggregation
 ```
+
+This script also backfills any missing season aggregation stats.
 
 **Performance Impact:**
 

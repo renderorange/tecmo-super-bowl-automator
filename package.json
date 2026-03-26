@@ -23,7 +23,8 @@
         "db:rollback": "knex migrate:rollback",
         "db:seed": "node scripts/seed.js",
         "db:backup": "cp -a data/stats.db data/backup/stats.db.$(date +\"%m%d%Y.%H%M%S\")",
-        "db:refresh-injury-stats": "node scripts/refresh-injury-stats.js",
+        "db:post-import-aggregation": "node scripts/post-import-aggregation.js",
+        "db:validate": "node scripts/validate-db.js",
         "extract-rom": "node scripts/extract-rom-data.js"
     },
     "dependencies": {

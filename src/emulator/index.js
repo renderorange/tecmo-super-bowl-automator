@@ -142,7 +142,7 @@ export class Emulator {
                                 games.push(parsed);
                                 await onGame(parsed, games.length);
                             } else {
-                                console.error("onGame callback warning: missing JSONL line for game event");
+                                console.log("onGame callback warning: missing JSONL line for game event");
                             }
                         } catch (e) {
                             console.error("onGame callback error:", e.message);

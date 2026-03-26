@@ -24,9 +24,11 @@ import { fileURLToPath } from "url";
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const projectRoot = path.resolve(__dirname, "..");
 
+const EXPECTED_GAMES_PER_SEASON = 224;
+
 const args = minimist(process.argv.slice(2), {
     alias: { o: "output", q: "quiet", d: "save-db" },
-    default: { "max-games": 224 },
+    default: { "max-games": EXPECTED_GAMES_PER_SEASON },
 });
 
 // Set up output file
@@ -139,6 +141,11 @@ try {
     gameCount = results.length;
     results.forEach((game) => updateRecords(game));
 
+    if (gameCount < maxGames) {
+        const last_week = currentWeek >= 0 ? currentWeek + 1 : "unknown";
+        throw new Error(`Incomplete season - got ${gameCount} games, expected ${maxGames} (last week ${last_week})`);
+    }
+
     // Finalize season in database
     if (repository && seasonId) {
         console.log("\nUpdating team season stats...");
@@ -157,6 +164,7 @@ try {
 
     console.log("\n==================================");
     console.log(`Season complete: ${gameCount} games in ${elapsed}s`);
+
     console.log(`Results: ${outputFile}`);
 
     // Print standings

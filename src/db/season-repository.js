@@ -62,15 +62,21 @@ export class SeasonRepository {
      * Create a new season record.
      *
      * @param {number} totalGames - Expected total games (default: 224)
+     * @param {object} options
+     * @param {string|Date|null} options.started_at - Optional season start timestamp
      * @returns {Promise<number>} The season ID
      */
-    async create_season(total_games = 224) {
-        const [season_id] = await this.db("seasons")
-            .insert({
-                total_games: total_games,
-                status: "running",
-            })
-            .returning("id");
+    async create_season(total_games = 224, options = {}) {
+        const row = {
+            total_games: total_games,
+            status: "running",
+        };
+
+        if (options.started_at) {
+            row.started_at = options.started_at;
+        }
+
+        const [season_id] = await this.db("seasons").insert(row).returning("id");
 
         return typeof season_id === "object" ? season_id.id : season_id;
     }
@@ -80,11 +86,15 @@ export class SeasonRepository {
      *
      * @param {number} season_id
      * @param {number} games_completed
+     * @param {object} options
+     * @param {string|Date|null} options.completed_at - Optional season completion timestamp
      * @returns {Promise<void>}
      */
-    async complete_season(season_id, games_completed) {
+    async complete_season(season_id, games_completed, options = {}) {
+        const completed_at = options.completed_at || this.db.fn.now();
+
         await this.db("seasons").where("id", season_id).update({
-            completed_at: this.db.fn.now(),
+            completed_at: completed_at,
             games_completed: games_completed,
             status: "completed",
         });
@@ -632,6 +642,15 @@ export class SeasonRepository {
             LEFT JOIN injuries i ON i.player_id = p.id
             GROUP BY p.id, p.name, p.team_id, t.name, p.position
         `);
+    }
+
+    /**
+     * Get all seasons.
+     *
+     * @returns {Promise<Array>} Array of season records
+     */
+    async get_all_seasons() {
+        return this.db("seasons").select("*").orderBy("id", "asc");
     }
 
     /**

@@ -87,6 +87,14 @@ describe("SeasonRepository.create_season", () => {
         const season = await db("seasons").where("id", season_id).first();
         expect(season.total_games).toBe(42);
     });
+
+    test("creates a season with explicit started_at", async () => {
+        const started_at = "2026-03-26T16:23:29.000Z";
+        const season_id = await repository.create_season(224, { started_at });
+
+        const season = await db("seasons").where("id", season_id).first();
+        expect(new Date(season.started_at).toISOString()).toBe(started_at);
+    });
 });
 
 describe("SeasonRepository.complete_season", () => {
@@ -99,6 +107,16 @@ describe("SeasonRepository.complete_season", () => {
         expect(season.status).toBe("completed");
         expect(season.games_completed).toBe(100);
         expect(season.completed_at).toBeDefined();
+    });
+
+    test("marks season as completed with explicit completed_at", async () => {
+        const season_id = await repository.create_season();
+        const completed_at = "2026-03-26T16:54:38.000Z";
+
+        await repository.complete_season(season_id, 224, { completed_at });
+
+        const season = await db("seasons").where("id", season_id).first();
+        expect(new Date(season.completed_at).toISOString()).toBe(completed_at);
     });
 });
 
@@ -485,6 +503,31 @@ describe("SeasonRepository.get_season_summary", () => {
     test("returns null for non-existent season", async () => {
         const summary = await repository.get_season_summary(99999);
         expect(summary).toBeNull();
+    });
+});
+
+describe("SeasonRepository.get_all_seasons", () => {
+    test("returns all seasons ordered by id", async () => {
+        const season_id1 = await repository.create_season();
+        const season_id2 = await repository.create_season();
+        const season_id3 = await repository.create_season();
+
+        await repository.complete_season(season_id1, 224);
+        await repository.complete_season(season_id2, 224);
+
+        const seasons = await repository.get_all_seasons();
+
+        expect(seasons).toHaveLength(3);
+        expect(seasons[0].id).toBe(season_id1);
+        expect(seasons[1].id).toBe(season_id2);
+        expect(seasons[2].id).toBe(season_id3);
+        expect(seasons[0].status).toBe("completed");
+        expect(seasons[2].status).toBe("running");
+    });
+
+    test("returns empty array when no seasons exist", async () => {
+        const seasons = await repository.get_all_seasons();
+        expect(seasons).toEqual([]);
     });
 });
 

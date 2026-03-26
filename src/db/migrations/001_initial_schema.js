@@ -63,7 +63,7 @@ export function up(knex) {
             table.timestamp("started_at").defaultTo(knex.fn.now());
             table.timestamp("completed_at");
             table.integer("games_completed").defaultTo(0);
-            table.integer("total_games").defaultTo(238);
+            table.integer("total_games").defaultTo(224);
             table.string("status").defaultTo("pending");
         })
 

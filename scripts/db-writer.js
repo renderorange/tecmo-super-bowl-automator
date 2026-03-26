@@ -48,8 +48,48 @@ function release_lock() {
     }
 }
 
-async function import_season(jsonl_file_path) {
-    const repository = new SeasonRepository();
+const DEFAULT_EXPECTED_GAMES = 224;
+
+function parse_start_time_from_filename(jsonl_file_path) {
+    const basename = path.basename(jsonl_file_path);
+    const match = basename.match(/^season-(\d{4}-\d{2}-\d{2}T\d{2}-\d{2}-\d{2})(?:-\d+)?\.jsonl$/);
+    if (!match) {
+        return null;
+    }
+
+    const iso_without_zone = match[1].replace(/T(\d{2})-(\d{2})-(\d{2})$/, "T$1:$2:$3");
+    const parsed = new Date(`${iso_without_zone}Z`);
+
+    if (Number.isNaN(parsed.getTime())) {
+        return null;
+    }
+
+    return parsed.toISOString();
+}
+
+function get_file_modified_time(jsonl_file_path) {
+    try {
+        const stats = fs.statSync(jsonl_file_path);
+        return stats.mtime.toISOString();
+    } catch {
+        return null;
+    }
+}
+
+/**
+ * Import a season from a JSONL file.
+ *
+ * @param {string} jsonl_file_path - Path to the JSONL file
+ * @param {object} options - Import options
+ * @param {number} options.expected_games - Expected number of games (default: 224)
+ * @param {boolean} options.skip_post_import - Skip update_team_season_stats and refresh_player_injury_stats (default: false)
+ * @param {object} options.db - Optional knex instance (defaults to real database)
+ * @returns {Promise<{season_id: number,games_saved: number, games_expected: number, is_complete: boolean}>}
+ */
+async function import_season(jsonl_file_path, options = {}) {
+    const expected_games = options.expected_games || DEFAULT_EXPECTED_GAMES;
+    const skip_post_import = options.skip_post_import || false;
+    const repository = new SeasonRepository(options.db ? { db: options.db } : {});
     const results = [];
 
     const file_content = fs.readFileSync(jsonl_file_path, "utf-8");
@@ -67,9 +107,18 @@ async function import_season(jsonl_file_path) {
         throw new Error(`No games found in ${jsonl_file_path}`);
     }
 
+    if (results.length !== expected_games) {
+        throw new Error(`Incomplete JSONL file: got ${results.length} games, expected ${expected_games}`);
+    }
+
     console.log(`  Importing ${results.length} games from ${path.basename(jsonl_file_path)}`);
 
-    const season_id = await repository.create_season(results.length);
+    const started_at = parse_start_time_from_filename(jsonl_file_path);
+    const completed_at = get_file_modified_time(jsonl_file_path);
+
+    const season_id = await repository.create_season(expected_games, {
+        started_at,
+    });
     console.log(`  Created season record: ${season_id}`);
 
     let games_saved = 0;
@@ -82,28 +131,46 @@ async function import_season(jsonl_file_path) {
         }
     }
 
-    console.log(`  Updating team season stats...`);
-    await repository.update_team_season_stats(season_id);
+    if (!skip_post_import) {
+        console.log(`  Updating team season stats...`);
+        await repository.update_team_season_stats(season_id);
 
-    console.log(`  Refreshing player injury stats...`);
-    await repository.refresh_player_injury_stats();
+        console.log(`  Refreshing player injury stats...`);
+        await repository.refresh_player_injury_stats();
+    }
 
-    await repository.complete_season(season_id, games_saved);
+    await repository.complete_season(season_id, games_saved, {
+        completed_at,
+    });
     console.log(`  Season ${season_id} saved to database`);
 
     console.log(`  Cleaning up ${jsonl_file_path}...`);
     fs.unlinkSync(jsonl_file_path);
     console.log("  JSONL file removed");
 
-    return { season_id, games_saved };
+    return {
+        season_id,
+        games_saved,
+        games_expected: expected_games,
+        is_complete: games_saved === expected_games,
+    };
 }
 
-async function import_all_seasons(jsonl_files) {
+/**
+ * Import multiple seasons from JSONL files.
+ *
+ * @param {string[]} jsonl_files - Array of JSONL file paths
+ * @param {object} options - Import options
+ * @param {number} options.expected_games - Expected number of games per season (default: 224)
+ * @param {boolean} options.skip_post_import - Skip update_team_season_stats and refresh_player_injury_stats (default: false)
+ * @param {object} options.db - Optional knex instance (defaults to real database)
+ * @returns {Promise<Array<{file: string, season_id?: number, games_saved?: number, success: boolean, error?: string}>>}
+ */
+async function import_all_seasons(jsonl_files, options = {}) {
     const imported = [];
-
     for (const jsonl_file of jsonl_files) {
         try {
-            const result = await import_season(jsonl_file);
+            const result = await import_season(jsonl_file, options);
             imported.push({
                 file: jsonl_file,
                 season_id: result.season_id,

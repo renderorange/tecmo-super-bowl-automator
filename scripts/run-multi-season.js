@@ -12,11 +12,11 @@
  *   node scripts/run-multi-season.js [options]
  *
  * Options:
- *   --seasons, -n    Number of seasons to run (default: 10)
+ *   --seasons, -n      Number of seasons to run (default: 10)
  *   --concurrency, -c  Max concurrent seasons (default: CPU cores - 1, min 1)
- *   --quiet, -q      Suppress per-game output from child processes
- *   --no-db          Skip database persistence (JSONL only)
- *   --skip-import   Skip database import (useful for just running sims)
+ *   --quiet, -q        Suppress per-game output from child processes
+ *   --no-db            Skip database persistence (JSONL only)
+ *   --skip-import      Skip database import (useful for just running sims)
  */
 
 import { spawn } from "child_process";
@@ -31,26 +31,33 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const PROJECT_ROOT = path.resolve(__dirname, "..");
 const RUN_SEASON_SCRIPT = path.join(__dirname, "run-season.js");
 
+const DEFAULT_MAX_GAMES = 224;
+
 const args = minimist(process.argv.slice(2), {
     alias: { n: "seasons", c: "concurrency", q: "quiet" },
     default: {
         seasons: 10,
         concurrency: Math.max(1, os.cpus().length - 1),
+        "max-games": DEFAULT_MAX_GAMES,
     },
-    boolean: ["quiet", "no-db", "skip-import"],
+    boolean: ["quiet", "no-db", "skip-import", "skip-post-import"],
 });
 
 const total_seasons = parseInt(args.seasons, 10);
 const max_concurrency = parseInt(args.concurrency, 10);
+const max_games = parseInt(args["max-games"], 10);
 const quiet = args.quiet || false;
 const skip_import = args["skip-import"] || false;
+const skip_post_import = args["skip-post-import"] || false;
 
 console.log("Tecmo Super Bowl Multi-Season Runner");
 console.log("=====================================");
-console.log(`Seasons:     ${total_seasons}`);
-console.log(`Concurrency: ${max_concurrency}`);
-console.log(`Database:    ${!skip_import ? "Enabled" : "Disabled"}`);
-console.log(`Quiet:       ${quiet}`);
+console.log(`Seasons:          ${total_seasons}`);
+console.log(`Concurrency:      ${max_concurrency}`);
+console.log(`Max games:        ${max_games}`);
+console.log(`Database:         ${!skip_import ? "Enabled" : "Disabled"}`);
+console.log(`Skip post-import: ${skip_post_import}`);
+console.log(`Quiet:            ${quiet}`);
 console.log();
 
 const results = [];
@@ -60,6 +67,31 @@ let failed = 0;
 let running = 0;
 let next_season = 0;
 const start_time = Date.now();
+
+function extract_failure_message(stderr_text) {
+    if (!stderr_text) {
+        return null;
+    }
+
+    const lines = stderr_text
+        .split("\n")
+        .map((line) => line.trim())
+        .filter(Boolean);
+
+    if (lines.length === 0) {
+        return null;
+    }
+
+    const priority_patterns = [/^Failed:/, /Incomplete season/, /nesl exited/, /Failed to start nesl/, /^Error:/];
+    for (const pattern of priority_patterns) {
+        const match = lines.find((line) => pattern.test(line));
+        if (match) {
+            return match;
+        }
+    }
+
+    return lines[lines.length - 1];
+}
 
 /**
  * Run a single season as a child process.
@@ -72,6 +104,9 @@ function run_season(season_number) {
         const child_args = [];
         if (quiet) {
             child_args.push("--quiet");
+        }
+        if (max_games !== DEFAULT_MAX_GAMES) {
+            child_args.push("--max-games", String(max_games));
         }
 
         const child = spawn("node", [RUN_SEASON_SCRIPT, ...child_args], {
@@ -128,8 +163,8 @@ function run_season(season_number) {
                         ` [${completed} done, ${failed} failed, ${running - 1} running]`,
                 );
                 if (!quiet && stderr_buffer.trim()) {
-                    const first_line = stderr_buffer.trim().split("\n")[0];
-                    console.error(`  stderr: ${first_line}`);
+                    const failure_line = extract_failure_message(stderr_buffer);
+                    console.error(`  stderr: ${failure_line}`);
                 }
             }
 
@@ -207,8 +242,8 @@ async function run_all() {
     if (failures.length > 0) {
         console.log("\nFailed seasons:");
         for (const f of failures) {
-            const first_err = f.stderr ? f.stderr.split("\n")[0] : null;
-            console.log(`  Season ${f.season_number}: exit ${f.exit_code}${first_err ? ` -- ${first_err}` : ""}`);
+            const failure_line = extract_failure_message(f.stderr);
+            console.log(`  Season ${f.season_number}: exit ${f.exit_code}${failure_line ? ` -- ${failure_line}` : ""}`);
         }
     }
 
@@ -221,7 +256,10 @@ async function run_all() {
             await acquire_lock();
             console.log("Acquired database lock");
 
-            const imported = await import_all_seasons(jsonl_files);
+            const imported = await import_all_seasons(jsonl_files, {
+                expected_games: max_games,
+                skip_post_import,
+            });
 
             console.log("\nImport results:");
             let imported_count = 0;
