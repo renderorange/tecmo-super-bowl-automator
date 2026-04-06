@@ -311,3 +311,15 @@ The data from this project can be queried and observed through the companion app
 - **Node.js** 18+ with ESM support
 - **nesl** emulator (see build instructions above)
 - **Tecmo Super Bowl (USA).nes** ROM file
+
+## Populated Data
+
+1000 completed seasons, with 224 games per season (224000 games total), have been captured and validated as complete.
+
+If you'd like to play around with the data before [tecmo-super-bowl-explorer](https://github.com/renderorange/tecmo-super-bowl-explorer) is deployed, [a tarball of the sqlite3 database is available for download](https://dl.adventurehound.io/tsb/stats.db.04052026.tar.gz).
+
+| File                     | Type    | Size |
+| ------------------------ | ------- | ---- |
+| stats.db.04052026.tar.gz | tarball | 348M |
+| stats.db (extracted)     | sqlite3 | 1.3G |
+
