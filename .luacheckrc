@@ -6,6 +6,7 @@ globals = {
     "gui",
     "joypad",
     "memory",
+    "savestate",
 }
 
 max_line_length = 140
