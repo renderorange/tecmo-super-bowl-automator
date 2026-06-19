@@ -9,7 +9,9 @@ npm install
 npm run db:migrate                # Create database schema
 npm run extract-rom               # Extract team/player data from ROM
 npm run db:seed                   # Seed database with ROM data
-npm test                          # Run tests (71 tests)
+npm test                          # Run JS tests (81 tests)
+npm run test:lua                  # Run Lua tests (15 tests, busted)
+npm run test:all                  # Run both: lua + js (96 tests)
 npm run simulate                  # Run one 17-week season
 npm run simulate:multi            # Run 10 seasons in parallel
 npm run db:backup                 # Backup database with timestamp
@@ -105,6 +107,7 @@ src/
     index.js              Node.js wrapper (spawns nesl, parses JSONL output)
     lua/
       memory.lua          SRAM/RAM addresses, stat byte layouts, injury/condition decoders
+      hang_detector.lua   Time-based hang detection (postgame, no-progress, stats-read fallback)
       controller.lua      Season simulation: menu navigation, game loop, stat extraction
 
 scripts/
@@ -122,6 +125,8 @@ tests/
     pipeline.test.js          JSONL-to-database round-trip integration (3 tests)
   emulator/
     index.test.js             Emulator wrapper tests (18 tests)
+  lua/
+    hang_detector_spec.lua    Busted spec for hang detection (15 tests)
 
 data/
   stats.db                   SQLite database (created by migrations + seed)
@@ -310,7 +315,15 @@ The data from this project can be queried and observed through the companion app
 
 - **Node.js** 18+ with ESM support
 - **nesl** emulator (see build instructions above)
+- **Lua 5.1** and **luarocks** (for the busted test runner and luacheck lint)
 - **Tecmo Super Bowl (USA).nes** ROM file
+
+On a fresh checkout, install the Lua test deps:
+
+```bash
+luarocks install busted 2.2.0 --local
+luarocks install luacheck --local
+```
 
 ## Populated Data
 
@@ -322,4 +335,3 @@ If you'd like to play around with the data before [tecmo-super-bowl-explorer](ht
 | ------------------------ | ------- | ---- |
 | stats.db.04052026.tar.gz | tarball | 348M |
 | stats.db (extracted)     | sqlite3 | 1.3G |
-
