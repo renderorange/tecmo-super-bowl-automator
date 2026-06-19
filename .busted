@@ -1,0 +1,8 @@
+return {
+    default = {
+        verbose = true,
+        output = "plainTerminal",
+        ROOT = { "tests/lua" },
+        lpath = "src/emulator/lua/?.lua;src/emulator/lua/?/init.lua",
+    },
+}

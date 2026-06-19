@@ -16,6 +16,8 @@ jobs:
                   node-version: lts/*
             - run: sudo apt update && sudo apt install -y luarocks
             - run: luarocks install luacheck --local
+            - run: luarocks install busted 2.2.0 --local
+            - run: PATH="$HOME/.luarocks/bin:$PATH" busted
             - run: npm ci
             - run: npm run db:migrate
             - run: npm run db:seed

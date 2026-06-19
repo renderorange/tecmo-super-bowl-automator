@@ -10,6 +10,7 @@
 local scriptPath = arg and arg[0] or ""
 local scriptDir = scriptPath:match("(.*/)") or "./"
 local mem = dofile(scriptDir .. "memory.lua")
+local HangDetector = dofile(scriptDir .. "hang_detector.lua")
 local ADDR = mem.ADDR
 local SRAM = mem.SRAM
 
@@ -18,7 +19,14 @@ local SRAM = mem.SRAM
 ------------------------------------------------------------------------
 local OUTPUT_FILE = os.getenv("TSB_OUTPUT") or "/tmp/tsb-results.jsonl"
 local MAX_GAMES = tonumber(os.getenv("TSB_MAX_GAMES")) or 224 -- 28 teams * 16 games / 2 (bye weeks reduce from 238)
-local MAX_FRAMES_PER_GAME = 300000 -- ~83 min at 60fps safety limit
+local MAX_FRAMES_PER_GAME = 90000 -- ~25 min at 60fps; per-game cap
+-- to bound total season runtime.
+-- If a game exceeds this, it is
+-- considered hung and the season
+-- is marked as failed by the
+-- Node wrapper. Lower than the
+-- previous 300,000 (~83 min) so
+-- failures are detected faster.
 local REGULAR_SEASON_WEEKS = 17 -- TSB 17-week regular season (weeks 0-16)
 
 -- Seed RNG from time + PID-like entropy so parallel runs diverge.
@@ -380,7 +388,7 @@ end
 -- Run one COM vs COM game
 -- Returns: stats table, or nil on timeout
 ------------------------------------------------------------------------
-local function runOneGame()
+local function attemptOneGame()
     -- Read pre-game standings for both teams BEFORE starting the game.
     -- We peek at the upcoming matchup from SRAM: the game loads team IDs
     -- into P1_TEAM/P2_TEAM when GAME START is selected, but they may not
@@ -406,22 +414,24 @@ local function runOneGame()
     local pregame_p2_record = nil
     local pregame_week = nil
     local pregame_game_in_week = nil
-    local saw_overtime = false
+
+    local det = HangDetector.new()
 
     for frame = 1, MAX_FRAMES_PER_GAME do
-        local gs = memory.readbyte(ADDR.GAME_STATUS)
-        local q = memory.readbyte(ADDR.QUARTER)
-        local mins = memory.readbyte(ADDR.CLOCK_MINUTES)
-        local my = memory.readbyte(ADDR.MENU_Y)
-
-        if q >= 4 then
-            saw_overtime = true
-        end
+        local state = {
+            gs = memory.readbyte(ADDR.GAME_STATUS),
+            q = memory.readbyte(ADDR.QUARTER),
+            mins = memory.readbyte(ADDR.CLOCK_MINUTES),
+            secs = memory.readbyte(ADDR.CLOCK_SECONDS),
+            my = memory.readbyte(ADDR.MENU_Y),
+            frame = frame,
+        }
+        local verdict = det:tick(state)
 
         -- Detect gameplay started (Q1 with clock running)
-        if not gameplay_started and q == 0 and mins > 0 and mins <= 5 then
+        if not gameplay_started and state.q == 0 and state.mins > 0 and state.mins <= 5 then
             gameplay_started = true
-            -- Capture pre-game records now that team IDs are set
+            det:reset_progress()
             local p1_id = memory.readbyte(ADDR.P1_TEAM)
             local p2_id = memory.readbyte(ADDR.P2_TEAM)
             pregame_p1_record = mem.readTeamRecord(p1_id)
@@ -430,13 +440,12 @@ local function runOneGame()
             pregame_game_in_week = memory.readbyte(SRAM.CURRENT_GAME)
         end
 
-        -- Read stats once after gameplay, when we first see a post-game screen
-        -- (gs >= $C0 after gameplay started, with clock at 0 in Q4+)
-        if gameplay_started and not stats_read and q >= 3 and mins == 0 and gs >= 0xC0 then
+        -- Read stats when readable (original gs>=0xC0 path + new fallback)
+        if gameplay_started and not stats_read and verdict.stats_readable then
             stats = readGameStats()
             stats.p1_pregame_record = pregame_p1_record
             stats.p2_pregame_record = pregame_p2_record
-            stats.is_overtime = saw_overtime
+            stats.is_overtime = verdict.saw_overtime
             if pregame_week ~= nil then
                 stats.week = pregame_week
             end
@@ -446,22 +455,21 @@ local function runOneGame()
             stats_read = true
         end
 
+        -- Break on stuck verdicts
+        if verdict.action == "stuck_postgame" or verdict.action == "stuck_noprogress" then
+            break
+        end
+
         -- Check for return to season menu
-        if gameplay_started and my == 0x02 and stats_read then
+        if gameplay_started and state.my == 0x02 and stats_read then
             idle(10)
             return stats
         end
 
-        -- During post-game screens, press A to advance.
-        -- Post-game is indicated by gs >= $C0 after gameplay.
-        -- Also press A during pre-game screens (coin toss etc.) which show gs >= $40.
-        -- Do NOT press A during active gameplay (gs=$92 etc. with clock running).
+        -- Existing postgame A-press logic and frameadvance() unchanged
         if gameplay_started and stats_read and frame % 30 == 0 then
-            -- Safe to press A: we've read stats and are in post-game
             joypad.write(1, { A = true })
         elseif not gameplay_started and frame % 60 == 0 then
-            -- Pre-game: press A for coin toss etc.
-            -- (COM mode shouldn't need this, but just in case)
             joypad.write(1, { A = true })
         else
             joypad.write(1, 0)
@@ -469,17 +477,41 @@ local function runOneGame()
 
         emu.frameadvance()
 
-        -- Safety log for very long games (5+ min wall-clock)
         if frame % 120000 == 0 then
-            print(string.format("  [long game] f=%d q=%d mins=%d gs=$%02X", frame, q, mins, gs))
+            print(string.format("  [long game] f=%d q=%d mins=%d gs=$%02X", frame, state.q, state.mins, state.gs))
         end
     end
 
-    -- Timed out
+    -- We exited the for loop without returning: either the
+    -- in-game hang detection fired (post-game or no-progress)
+    -- or we hit the hard MAX_FRAMES_PER_GAME cap. In both
+    -- cases the engine is in a stuck state. Return what stats
+    -- we have (nil if we never read any). The main loop will
+    -- see nil and break with TIMEOUT, and the Node wrapper
+    -- will mark this season as failed.
+    return stats
+end
+
+------------------------------------------------------------------------
+-- Wraps attemptOneGame with a save-state retry. If the game gets
+-- stuck, we restore the pre-game state and try once more. For
+-- non-deterministic hangs (e.g. timing-dependent), the retry has
+-- a chance of succeeding. For deterministic hangs, the retry
+-- will also fail and the season is marked as failed.
+------------------------------------------------------------------------
+local function runOneGame()
+    local preState = savestate.create()
+    savestate.save(preState)
+
+    local stats = attemptOneGame()
     if stats then
         return stats
     end
-    return nil
+
+    -- First attempt returned nil (in-game hang or hard cap).
+    -- Retry once with a fresh state.
+    savestate.load(preState)
+    return attemptOneGame()
 end
 
 ------------------------------------------------------------------------
